@@ -26,7 +26,13 @@ export default function ClientsPage() {
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const res = await fetch("/api/clients")
+        const res = await fetch("/api/clients", {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        })
         if (res.ok) {
           const data = await res.json()
           setClients(data)
@@ -120,10 +126,8 @@ export default function ClientsPage() {
               className="w-full h-10 pl-9 pr-4 rounded-xl border border-input bg-background/50 backdrop-blur-sm text-sm outline-none transition-all focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
-          <Link href="/dashboard/clients/new" className={buttonVariants({ variant: "default", className: "w-auto shrink-0" })}>
-            <Plus className="mr-2 h-4 w-4 hidden sm:inline-block" />
-            <span className="hidden sm:inline-block">Add New Client</span>
-            <Plus className="h-4 w-4 sm:hidden" />
+          <Link href="/dashboard/clients/new" className={buttonVariants({ variant: "default", size: "icon", className: "h-10 w-10 shrink-0 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all bg-primary text-primary-foreground" })}>
+            <Plus className="h-5 w-5" strokeWidth={2.5} />
           </Link>
         </div>
       </div>

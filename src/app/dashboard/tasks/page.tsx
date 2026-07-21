@@ -163,21 +163,26 @@ export function TaskDashboard() {
 
   return (
     <div className="space-y-6 md:space-y-8 animate-slide-up">
-      <div className="flex flex-col gap-4">
+      <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground font-heading tracking-tight">Tasks</h1>
-            {role && canCreateTask(role) && (
-              <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                <DialogTrigger
-                  render={
-                    <Button size="sm">
-                      <Plus className="mr-1.5 h-4 w-4" />
-                      New task
-                    </Button>
-                  }
-                />
-                <DialogContent>
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground font-heading tracking-tight">Tasks</h1>
+          <p className="text-sm text-muted-foreground font-medium">
+            {role && isStaffLeadership(role)
+              ? "Every task across your assigned clients."
+              : "Tasks assigned to you."}
+          </p>
+        </div>
+
+        {role && canCreateTask(role) && (
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger
+              render={
+                <Button size="icon" className="h-10 w-10 shrink-0 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all bg-primary text-primary-foreground">
+                  <Plus className="h-5 w-5" strokeWidth={2.5} />
+                </Button>
+              }
+            />
+            <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Create a task</DialogTitle>
                   </DialogHeader>
@@ -233,13 +238,6 @@ export function TaskDashboard() {
                 </DialogContent>
               </Dialog>
             )}
-          </div>
-          <p className="text-sm text-muted-foreground font-medium">
-            {role && isStaffLeadership(role)
-              ? "Every task across your assigned clients."
-              : "Tasks assigned to you."}
-          </p>
-        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 animate-fade-in overflow-x-auto pb-2 scrollbar-hide" style={{ animationDelay: '100ms' }}>
