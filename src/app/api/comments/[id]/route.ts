@@ -3,11 +3,11 @@ import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const userId = req.headers.get("x-mock-userid") || "dummy_user";
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
     const { content } = body;
 
@@ -47,12 +47,12 @@ export async function PATCH(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const userId = req.headers.get("x-mock-userid") || "dummy_user";
     const userRole = req.headers.get("x-mock-role") || "CLIENT";
-    const { id } = params;
+    const { id } = await params;
 
     const comment = await prisma.comment.findUnique({ where: { id } });
     if (!comment) return NextResponse.json({ error: "Comment not found" }, { status: 404 });

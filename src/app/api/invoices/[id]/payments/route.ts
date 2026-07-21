@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const userRole = req.headers.get("x-mock-role") || "ADMIN"; // TODO: get from auth session
@@ -12,7 +12,7 @@ export async function POST(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { id: invoiceId } = params;
+    const { id: invoiceId } = await params;
     const body = await req.json();
     const { amount, method, referenceId, paymentDate } = body;
 

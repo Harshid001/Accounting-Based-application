@@ -3,10 +3,10 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     const invoice = await prisma.invoice.findUnique({
       where: { id },
@@ -31,7 +31,7 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const userRole = req.headers.get("x-mock-role") || "ADMIN"; // TODO: get from auth session
@@ -39,7 +39,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { id: invoiceId } = params;
+    const { id: invoiceId } = await params;
     const body = await req.json();
     const { status } = body;
     
