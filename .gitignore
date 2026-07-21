@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -39,3 +39,19 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/src/generated/prisma
+
+# desktop (electron) builds
+dist/
+release/
+
+# gitleaks and security
+gitleaks*
+gitleaks.zip
+gitleaks_temp/
+gitleaks_report.txt
+
+# mobile workspace
+/mobile/node_modules/
+/mobile/dist/

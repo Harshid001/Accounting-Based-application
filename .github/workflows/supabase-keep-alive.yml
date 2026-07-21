@@ -1,0 +1,33 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # Run at 00:00 on every 3rd day-of-month
+    - cron: "0 0 */3 * *"
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_PROJECT_REF" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "Error: SUPABASE_PROJECT_REF or SUPABASE_ANON_KEY is not set in GitHub Secrets."
+            exit 1
+          fi
+          
+          # Hitting the REST API root to register DB activity and prevent auto-pause
+          RESPONSE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X GET "https://${SUPABASE_PROJECT_REF}.supabase.co/rest/v1/" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+            
+          echo "Supabase responded with HTTP code: $RESPONSE_CODE"
+          
+          if [ "$RESPONSE_CODE" -ne 200 ]; then
+            echo "Failed to ping Supabase successfully."
+            exit 1
+          fi

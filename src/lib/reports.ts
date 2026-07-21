@@ -1,0 +1,162 @@
+import { prisma } from "./prisma";
+import { Prisma } from "@prisma/client";
+
+export async function validateReportParams(userId: string, role: string, startDate?: string, endDate?: string, clientId?: string) {
+  // 1. Validate dates
+  const start = startDate ? new Date(startDate) : new Date(new Date().setFullYear(new Date().getFullYear() - 1));
+  const end = endDate ? new Date(endDate) : new Date();
+
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    throw new Error("Invalid date format");
+  }
+
+  if (end < start) {
+    throw new Error("endDate cannot be before startDate");
+  }
+
+  const maxRangeMs = 5 * 365 * 24 * 60 * 60 * 1000;
+  if (end.getTime() - start.getTime() > maxRangeMs) {
+    throw new Error("Report date range cannot exceed 5 years");
+  }
+
+  // 2. Client Scoping
+  let clientIdsFilter: string[] | undefined = undefined;
+
+  if (role === "ACCOUNTANT") {
+    // Determine which clients this accountant can access
+    const assignedClients = await prisma.client.findMany({
+      where: { assignedTo: { some: { id: userId } } },
+      select: { id: true }
+    });
+    const allowedIds = assignedClients.map(c => c.id);
+
+    if (clientId) {
+      if (!allowedIds.includes(clientId)) {
+        throw new Error("FORBIDDEN: Unauthorized for this client");
+      }
+      clientIdsFilter = [clientId];
+    } else {
+      clientIdsFilter = allowedIds;
+    }
+  } else if (role === "ADMIN" || role === "MANAGER") {
+    if (clientId) {
+      clientIdsFilter = [clientId];
+    }
+  } else {
+    throw new Error("FORBIDDEN: Access denied");
+  }
+
+  return { start, end, clientIdsFilter };
+}
+
+export async function getRevenueReportData(userId: string, role: string, startDate?: string, endDate?: string, clientId?: string) {
+  const { start, end, clientIdsFilter } = await validateReportParams(userId, role, startDate, endDate, clientId);
+
+  // Get Invoice totals
+  const invoiceWhere: Prisma.InvoiceWhereInput = {
+    issueDate: { gte: start, lte: end },
+    ...(clientIdsFilter ? { clientId: { in: clientIdsFilter } } : {})
+  };
+
+  const invoiceAgg = await prisma.invoice.aggregate({
+    _sum: { total: true },
+    where: invoiceWhere
+  });
+  
+  // Exclude VOID invoices from total billed?
+  // Wait, the aggregate above includes VOID. Let's exclude VOID.
+  const activeInvoiceWhere: Prisma.InvoiceWhereInput = {
+    ...invoiceWhere,
+    status: { not: "VOID" }
+  };
+  
+  const activeInvoiceAgg = await prisma.invoice.aggregate({
+    _sum: { total: true },
+    where: activeInvoiceWhere
+  });
+
+  const totalBilled = activeInvoiceAgg._sum.total || new Prisma.Decimal(0);
+
+  // Get Payment totals
+  const paymentWhere: Prisma.PaymentWhereInput = {
+    paymentDate: { gte: start, lte: end },
+    invoice: clientIdsFilter ? { clientId: { in: clientIdsFilter } } : undefined
+  };
+
+  const paymentAgg = await prisma.payment.aggregate({
+    _sum: { amount: true },
+    where: paymentWhere
+  });
+
+  const totalCollected = paymentAgg._sum.amount || new Prisma.Decimal(0);
+  
+  // Outstanding balance (total billed - total collected) - note: this isn't strictly
+  // outstanding balance for *these* invoices, but aggregate over the period.
+  // Actually, standard outstanding balance is just billed - collected in the period.
+  const outstandingBalance = totalBilled.minus(totalCollected);
+
+  // Get totals by client for breakdown
+  const invoicesByClient = await prisma.invoice.groupBy({
+    by: ['clientId'],
+    _sum: { total: true },
+    where: activeInvoiceWhere
+  });
+
+  const paymentsByClient = await prisma.payment.groupBy({
+    by: ['invoiceId'],
+    _sum: { amount: true },
+    where: paymentWhere
+  });
+  
+  // We can fetch client names if needed, but for the API, returning just the raw Decimal strings is fine.
+  
+  return {
+    period: { start, end },
+    metrics: {
+      totalBilled: totalBilled.toString(),
+      totalCollected: totalCollected.toString(),
+      outstandingBalance: outstandingBalance.toString()
+    }
+  };
+}
+
+export async function getComplianceReportData(userId: string, role: string, startDate?: string, endDate?: string, clientId?: string) {
+  const { start, end, clientIdsFilter } = await validateReportParams(userId, role, startDate, endDate, clientId);
+
+  const whereClause: Prisma.ComplianceItemWhereInput = {
+    dueDate: { gte: start, lte: end },
+    ...(clientIdsFilter ? { clientId: { in: clientIdsFilter } } : {})
+  };
+
+  // Status breakdown
+  const statusCounts = await prisma.complianceItem.groupBy({
+    by: ['status'],
+    _count: { id: true },
+    where: whereClause
+  });
+
+  // Type breakdown
+  const typeCounts = await prisma.complianceItem.groupBy({
+    by: ['type'],
+    _count: { id: true },
+    where: whereClause
+  });
+
+  // Overdue count (PENDING/IN_PROGRESS and dueDate < now)
+  const overdueCount = await prisma.complianceItem.count({
+    where: {
+      ...whereClause,
+      status: { in: ["PENDING", "IN_PROGRESS"] },
+      dueDate: { lt: new Date() }
+    }
+  });
+
+  return {
+    period: { start, end },
+    metrics: {
+      statusBreakdown: statusCounts,
+      typeBreakdown: typeCounts,
+      overdueCount
+    }
+  };
+}

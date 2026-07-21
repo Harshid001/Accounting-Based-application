@@ -2,23 +2,81 @@
   "name": "afms",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "mobile"
+  ],
+  "main": "main.js",
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "next lint",
+    "postinstall": "prisma generate",
+    "test": "npx dotenv-cli -e .env.test -- vitest run --no-file-parallelism",
+    "test:watch": "npx dotenv-cli -e .env.test -- vitest --no-file-parallelism",
+    "test:db:setup": "npx dotenv-cli -e .env.test -- npx prisma db push --force-reset && npx dotenv-cli -e .env.test -- tsx add_comment_constraint.ts",
+    "test:permissions": "tsx scripts/verify-permissions.ts",
+    "desktop:dev": "electron .",
+    "desktop:build": "next build && electron-builder"
+  },
+  "build": {
+    "appId": "com.afms.app",
+    "productName": "Accounting Business App",
+    "files": [
+      "main.js",
+      "package.json",
+      ".next/**/*",
+      "public/**/*",
+      "node_modules/**/*",
+      "prisma/**/*"
+    ],
+    "extraResources": [
+      "prisma/**/*"
+    ]
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1090.0",
+    "@aws-sdk/s3-request-presigner": "^3.1090.0",
+    "@base-ui/react": "^1.6.0",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@ducanh2912/next-pwa": "^10.2.9",
+    "@prisma/client": "^5.22.0",
+    "@react-pdf/renderer": "^4.5.1",
+    "bcryptjs": "^3.0.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "google-auth-library": "^10.9.0",
+    "lucide-react": "^1.25.0",
     "next": "16.2.10",
+    "next-auth": "^4.24.14",
+    "prisma": "^5.22.0",
+    "razorpay": "^2.9.8",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "autoprefixer": "^10.5.4",
+    "concurrently": "^10.0.3",
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
-    "typescript": "^5"
+    "postcss": "^8.5.20",
+    "puppeteer": "^25.3.0",
+    "tailwindcss": "^3.4.19",
+    "tailwindcss-animate": "^1.0.7",
+    "tsx": "^4.23.1",
+    "typescript": "^5",
+    "vitest": "^4.1.10",
+    "wait-on": "^9.0.10"
   }
 }

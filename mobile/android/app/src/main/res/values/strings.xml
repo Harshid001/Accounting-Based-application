@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">afms</string>
+    <string name="title_activity_main">afms</string>
+    <string name="package_name">com.afms.app</string>
+    <string name="custom_url_scheme">com.afms.app</string>
+    <string name="server_client_id">542317812292-f4hredsnfigmr46rv1k1pio566og96lh.apps.googleusercontent.com</string>
+</resources>
