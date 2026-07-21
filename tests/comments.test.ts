@@ -109,7 +109,7 @@ describe("Comments API", () => {
         json: async () => ({ content: "Admin editing" }),
         headers: new Headers({ "x-mock-role": "ADMIN", "x-mock-userid": adminUser.id })
       } as any;
-      const editResAdmin = await patchComment(editReqAdmin, { params: { id: createdComment.id } });
+      const editResAdmin = await patchComment(editReqAdmin, { params: Promise.resolve({ id: createdComment.id }) } as any);
       expect(editResAdmin.status).toBe(403);
     });
 
@@ -118,7 +118,7 @@ describe("Comments API", () => {
         json: async () => ({ content: "Accountant editing own" }),
         headers: new Headers({ "x-mock-role": "ACCOUNTANT", "x-mock-userid": accUser.id })
       } as any;
-      const editResAcc = await patchComment(editReqAcc, { params: { id: createdComment.id } });
+      const editResAcc = await patchComment(editReqAcc, { params: Promise.resolve({ id: createdComment.id }) } as any);
       expect(editResAcc.status).toBe(200);
     });
 
@@ -126,7 +126,7 @@ describe("Comments API", () => {
       const deleteReqAdmin = {
         headers: new Headers({ "x-mock-role": "ADMIN", "x-mock-userid": adminUser.id })
       } as any;
-      const deleteResAdmin = await deleteComment(deleteReqAdmin, { params: { id: createdComment.id } });
+      const deleteResAdmin = await deleteComment(deleteReqAdmin, { params: Promise.resolve({ id: createdComment.id }) } as any);
       expect(deleteResAdmin.status).toBe(200);
       
       const audit = await prisma.auditLog.findFirst({

@@ -108,7 +108,7 @@ describe("Billing & Invoicing API", () => {
     const res = await createInvoice(assignedReq);
     const invoice = await res.json();
 
-    const getRes = await getInvoice({} as any, { params: { id: invoice.id } });
+    const getRes = await getInvoice({} as any, { params: Promise.resolve({ id: invoice.id }) } as any);
     expect(getRes.status).toBe(200);
     const fetchedInvoice = await getRes.json();
     expect(fetchedInvoice.invoiceNumber).toBe(invoice.invoiceNumber);
@@ -135,7 +135,7 @@ describe("Billing & Invoicing API", () => {
         json: async () => overpaymentPayload,
         headers: new Headers({ "x-mock-role": "ADMIN" })
       } as any;
-      const paymentRes = await createPayment(mockPaymentReq, { params: { id: activeInvoice.id } });
+      const paymentRes = await createPayment(mockPaymentReq, { params: Promise.resolve({ id: activeInvoice.id }) } as any);
       expect(paymentRes.status).toBe(400);
       const paymentResult = await paymentRes.json();
       expect(paymentResult.error).toContain("OVERPAYMENT");
@@ -144,7 +144,7 @@ describe("Billing & Invoicing API", () => {
     it("should handle partial payment and transition status to PARTIALLY_PAID", async () => {
       const partialPayload = { amount: 1000.00, method: "CASH" };
       const partialReq = { json: async () => partialPayload, headers: new Headers({ "x-mock-role": "ADMIN" }) } as any;
-      const partialRes = await createPayment(partialReq, { params: { id: activeInvoice.id } });
+      const partialRes = await createPayment(partialReq, { params: Promise.resolve({ id: activeInvoice.id }) } as any);
       
       expect(partialRes.status).toBe(201);
       const partialResult = await partialRes.json();
@@ -155,14 +155,14 @@ describe("Billing & Invoicing API", () => {
       // make partial payment
       const partialPayload = { amount: 1000.00, method: "CASH" };
       const partialReq = { json: async () => partialPayload, headers: new Headers({ "x-mock-role": "ADMIN" }) } as any;
-      await createPayment(partialReq, { params: { id: activeInvoice.id } });
+      await createPayment(partialReq, { params: Promise.resolve({ id: activeInvoice.id }) } as any);
 
       // try void
       const patchReq = { 
         json: async () => ({ status: "VOID" }),
         headers: new Headers({ "x-mock-role": "ADMIN" }) 
       } as any;
-      const patchRes = await patchInvoice(patchReq, { params: { id: activeInvoice.id } });
+      const patchRes = await patchInvoice(patchReq, { params: Promise.resolve({ id: activeInvoice.id }) } as any);
       
       expect(patchRes.status).toBe(400);
       const resJson = await patchRes.json();
@@ -172,7 +172,7 @@ describe("Billing & Invoicing API", () => {
     it("should handle full payment and transition to PAID", async () => {
       const fullPayload = { amount: 2100.00, method: "CASH" }; // Total is 2100
       const fullReq = { json: async () => fullPayload, headers: new Headers({ "x-mock-role": "ADMIN" }) } as any;
-      const fullRes = await createPayment(fullReq, { params: { id: activeInvoice.id } });
+      const fullRes = await createPayment(fullReq, { params: Promise.resolve({ id: activeInvoice.id }) } as any);
       
       expect(fullRes.status).toBe(201);
       const fullResult = await fullRes.json();

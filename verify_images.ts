@@ -28,7 +28,7 @@ import puppeteer from 'puppeteer';
     const response = await page.goto(testImageUrl);
     console.log('Status:', response?.status());
     
-    if (response?.status() >= 400) {
+    if ((response?.status() ?? 0) >= 400) {
       console.error('Next/Image optimization returned', response?.status());
       hasErrors = true;
     } else {

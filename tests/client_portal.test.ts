@@ -372,7 +372,7 @@ describe('Client Portal & Razorpay', () => {
       }
 
       const req = new Request('http://localhost/api/invoices/download', { method: 'GET' })
-      const res = await downloadGet(req, { params: { id: otherInvoiceId } })
+      const res = await downloadGet(req, { params: Promise.resolve({ id: otherInvoiceId }) } as any)
 
       expect(res.status).toBe(403)
       const json = await res.json()
@@ -385,7 +385,7 @@ describe('Client Portal & Razorpay', () => {
       }
 
       const req = new Request('http://localhost/api/invoices/download', { method: 'GET' })
-      const res = await downloadGet(req, { params: { id: invoiceId } })
+      const res = await downloadGet(req, { params: Promise.resolve({ id: invoiceId }) } as any)
 
       expect(res.status).toBe(200)
       expect(res.headers.get('Content-Type')).toBe('application/pdf')
@@ -397,7 +397,7 @@ describe('Client Portal & Razorpay', () => {
       }
 
       const req = new Request('http://localhost/api/invoices/download', { method: 'GET' })
-      const res = await downloadGet(req, { params: { id: otherInvoiceId } })
+      const res = await downloadGet(req, { params: Promise.resolve({ id: otherInvoiceId }) } as any)
 
       expect(res.status).toBe(200)
     })
@@ -406,7 +406,7 @@ describe('Client Portal & Razorpay', () => {
       mockSession = null
 
       const req = new Request('http://localhost/api/invoices/download', { method: 'GET' })
-      const res = await downloadGet(req, { params: { id: invoiceId } })
+      const res = await downloadGet(req, { params: Promise.resolve({ id: invoiceId }) } as any)
 
       expect(res.status).toBe(401)
     })

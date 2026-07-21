@@ -212,7 +212,7 @@ export default function UsersPage() {
                         <Link2 className="h-4 w-4 text-muted-foreground shrink-0" />
                         <Select
                           value={user.clientId || "__none__"}
-                          onValueChange={(val) => handleClientLink(user.id, val)}
+                          onValueChange={(val) => handleClientLink(user.id as string, val as string)}
                         >
                           <SelectTrigger className="w-full h-9 text-xs font-medium">
                             <SelectValue placeholder="Link to client..." />
@@ -272,7 +272,7 @@ export default function UsersPage() {
                         {user.role === "CLIENT" ? (
                           <Select
                             value={user.clientId || "__none__"}
-                            onValueChange={(val) => handleClientLink(user.id, val)}
+                            onValueChange={(val) => handleClientLink(user.id as string, val as string)}
                           >
                             <SelectTrigger className="w-[160px]">
                               <SelectValue placeholder="Link client..." />
