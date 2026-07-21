@@ -3,6 +3,7 @@ import { Inter, Geist } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
+import { InstallPWA } from "@/components/InstallPWA";
 import { cn } from "@/lib/utils";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
@@ -53,7 +54,10 @@ export default function RootLayout({
       </head>
       <body>
         <ServiceWorkerRegistrar />
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <InstallPWA />
+        </Providers>
       </body>
     </html>
   );
