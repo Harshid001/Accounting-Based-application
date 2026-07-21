@@ -69,7 +69,8 @@ export async function POST(
       if (invoice.status !== newStatus) {
         updatedInvoice = await tx.invoice.update({
           where: { id: invoiceId },
-          data: { status: newStatus }
+          data: { status: newStatus },
+          include: { payments: true }
         });
       }
 
