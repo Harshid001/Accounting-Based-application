@@ -5,7 +5,8 @@
   "scripts": {
     "sync": "cap sync",
     "android": "cap run android",
-    "android:dev": "cap run android"
+    "android:dev": "cap run android",
+    "sync:prod": "cross-env CAPACITOR_ENV=production CAPACITOR_SERVER_URL=https://accounting-based-application-aaasqvwtc.vercel.app cap sync"
   },
   "dependencies": {
     "@capacitor/core": "^8.4.2",
@@ -14,6 +15,7 @@
   },
   "devDependencies": {
     "@capacitor/android": "^8.4.2",
-    "@capacitor/cli": "^8.4.2"
+    "@capacitor/cli": "^8.4.2",
+    "cross-env": "^10.1.0"
   }
 }
