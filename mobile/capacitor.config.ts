@@ -17,6 +17,11 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchAutoHide: false,
       backgroundColor: "#0f172a"
+    },
+    GoogleSignIn: {
+      scopes: ['profile', 'email'],
+      serverClientId: '542317812292-f4hredsnfigmr46rv1k1pio566og96lh.apps.googleusercontent.com',
+      forceCodeForRefreshToken: true
     }
   }
 };

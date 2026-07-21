@@ -73,7 +73,7 @@ model ComplianceItem {
   filedDate    DateTime?
   notes        String?
   Comment      Comment[]
-  client       Client           @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  client       Client           @relation(fields: [clientId], references: [id])
   Notification Notification[]
   tasks        Task[]
 
@@ -92,7 +92,7 @@ model Document {
   updatedAt        DateTime     @updatedAt
   uploadedById     String
   Comment          Comment[]
-  client           Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  client           Client       @relation(fields: [clientId], references: [id])
 }
 
 model AuditLog {
@@ -158,7 +158,7 @@ model Invoice {
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
   Comment               Comment[]
-  client                Client               @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  client                Client               @relation(fields: [clientId], references: [id])
   serviceSubscription   ServiceSubscription? @relation(fields: [serviceSubscriptionId], references: [id])
   lineItems             InvoiceLineItem[]
   payments              Payment[]
@@ -186,8 +186,8 @@ model Payment {
   paymentDate    DateTime @default(now())
   method         String
   referenceId    String?
-  gatewayEventId String?  @unique
   createdAt      DateTime @default(now())
+  gatewayEventId String?  @unique
   invoice        Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@index([paymentDate])

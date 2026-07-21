@@ -105,15 +105,7 @@
     @apply transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl hover:shadow-primary/10;
   }
   
-  /* Animated Mesh Background */
-  .animated-mesh-bg {
-    background: radial-gradient(at 0% 0%, hsla(var(--primary)/0.15) 0px, transparent 50%),
-                radial-gradient(at 100% 0%, hsla(var(--ring)/0.15) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, hsla(var(--accent)/0.1) 0px, transparent 50%),
-                radial-gradient(at 0% 100%, hsla(var(--primary)/0.1) 0px, transparent 50%);
-    background-size: 200% 200%;
-    animation: mesh-movement 15s ease infinite alternate;
-  }
+
 }
 
 @keyframes fadeIn {
@@ -124,10 +116,4 @@
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(24px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes mesh-movement {
-  0% { background-position: 0% 0%; }
-  50% { background-position: 100% 100%; }
-  100% { background-position: 0% 100%; }
 }

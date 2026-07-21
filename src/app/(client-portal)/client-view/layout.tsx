@@ -25,7 +25,7 @@ export default async function ClientLayout({
   }
 
   return (
-    <div className="flex min-h-screen animated-mesh-bg text-foreground relative selection:bg-primary/30">
+    <div className="flex min-h-screen bg-background text-foreground relative selection:bg-primary/30">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border bg-card/80 backdrop-blur-md shadow-sm z-10 sticky top-0 h-screen print:hidden">
         <div className="flex items-center gap-3 border-b border-border px-6 py-5">
