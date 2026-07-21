@@ -99,6 +99,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           fileKey,
           fileName: cleanName,
           complianceItemId: complianceItemId || null,
+          uploadedById: session.user.id,
         }
       })
 
