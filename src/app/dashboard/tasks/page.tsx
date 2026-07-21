@@ -163,82 +163,83 @@ export function TaskDashboard() {
 
   return (
     <div className="space-y-6 md:space-y-8 animate-slide-up">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground font-heading tracking-tight">Tasks</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground font-heading tracking-tight">Tasks</h1>
+            {role && canCreateTask(role) && (
+              <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                <DialogTrigger
+                  render={
+                    <Button size="sm">
+                      <Plus className="mr-1.5 h-4 w-4" />
+                      New task
+                    </Button>
+                  }
+                />
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create a task</DialogTitle>
+                  </DialogHeader>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      createTask(new FormData(e.currentTarget))
+                    }}
+                    className="space-y-4"
+                  >
+                    <div className="space-y-1.5">
+                      <Label htmlFor="title">Title</Label>
+                      <Input id="title" name="title" required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="clientId">Client</Label>
+                      <select
+                        id="clientId"
+                        name="clientId"
+                        required
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                      >
+                        {clients.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="assignedToId">Assign to</Label>
+                      <select
+                        id="assignedToId"
+                        name="assignedToId"
+                        required
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                      >
+                        {staff.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="dueDate">Due date (optional)</Label>
+                      <Input id="dueDate" name="dueDate" type="date" />
+                    </div>
+                    <DialogFooter>
+                      <Button type="submit">Create task</Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground font-medium">
             {role && isStaffLeadership(role)
               ? "Every task across your assigned clients."
               : "Tasks assigned to you."}
           </p>
         </div>
-
-        {role && canCreateTask(role) && (
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger
-              render={
-                <Button size="sm">
-                  <Plus className="mr-1.5 h-4 w-4" />
-                  New task
-                </Button>
-              }
-            />
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create a task</DialogTitle>
-              </DialogHeader>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  createTask(new FormData(e.currentTarget))
-                }}
-                className="space-y-4"
-              >
-                <div className="space-y-1.5">
-                  <Label htmlFor="title">Title</Label>
-                  <Input id="title" name="title" required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="clientId">Client</Label>
-                  <select
-                    id="clientId"
-                    name="clientId"
-                    required
-                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  >
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="assignedToId">Assign to</Label>
-                  <select
-                    id="assignedToId"
-                    name="assignedToId"
-                    required
-                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  >
-                    {staff.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="dueDate">Due date (optional)</Label>
-                  <Input id="dueDate" name="dueDate" type="date" />
-                </div>
-                <DialogFooter>
-                  <Button type="submit">Create task</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        )}
       </div>
 
       <div className="flex flex-wrap gap-2 animate-fade-in overflow-x-auto pb-2 scrollbar-hide" style={{ animationDelay: '100ms' }}>
