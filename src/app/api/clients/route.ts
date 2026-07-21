@@ -62,6 +62,12 @@ export async function POST(req: Request) {
 
     const data = await req.json()
 
+    // Automatically add the creator to the assigned staff list 
+    // to ensure they can see the client they just created, 
+    // especially important for non-ADMIN users.
+    const assignedIds = new Set<string>(data.assignedToIds || [])
+    assignedIds.add(session.user.id)
+
     // Create the client
     const client = await prisma.client.create({
       data: {
@@ -72,9 +78,9 @@ export async function POST(req: Request) {
         tan: data.tan,
         address: data.address,
         status: data.status || "ACTIVE",
-        assignedTo: data.assignedToIds ? {
-          connect: data.assignedToIds.map((id: string) => ({ id }))
-        } : undefined,
+        assignedTo: {
+          connect: Array.from(assignedIds).map(id => ({ id }))
+        },
       },
       include: {
         assignedTo: {
