@@ -26,7 +26,7 @@ export function ClientBottomNav() {
   const itemsToDisplay = NAV_ITEMS.slice(0, 5)
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 flex h-[calc(70px+env(safe-area-inset-bottom))] items-center justify-around border-t border-border/40 bg-background/95 pb-[env(safe-area-inset-bottom)] px-2 backdrop-blur-xl transition-all md:hidden">
+    <div className="fixed bottom-0 left-0 right-0 z-50 flex h-[calc(70px+env(safe-area-inset-bottom))] items-center justify-around border-t border-border/40 bg-background/95 pb-[env(safe-area-inset-bottom)] px-2 backdrop-blur-xl transition-all">
       {itemsToDisplay.map((item) => {
         const isActive = pathname === item.href
         const Icon = item.icon

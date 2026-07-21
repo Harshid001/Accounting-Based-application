@@ -93,24 +93,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Quick Actions */}
-        <div className="flex flex-wrap items-center gap-3">
-          <Link href="/dashboard/clients">
-            <Button className="rounded-xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all h-11 px-5 bg-primary/90 hover:bg-primary text-primary-foreground font-semibold">
-              <Users className="mr-2 h-4 w-4" /> Directory
-            </Button>
-          </Link>
-          <Link href="/dashboard/tasks">
-            <Button variant="secondary" className="rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all bg-secondary/70 hover:bg-secondary h-11 px-5 text-secondary-foreground font-semibold">
-              <ClipboardList className="mr-2 h-4 w-4" /> Tasks
-            </Button>
-          </Link>
-          <Link href="/dashboard/taxes">
-            <Button variant="outline" className="rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all bg-background/50 backdrop-blur-sm h-11 px-5 border-border font-semibold">
-              <Clock className="mr-2 h-4 w-4" /> Deadlines
-            </Button>
-          </Link>
-        </div>
+
       </div>
       
       {/* Stats Grid */}

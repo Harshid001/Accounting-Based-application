@@ -242,7 +242,7 @@ export function TaskDashboard() {
       </div>
 
       <div className="flex flex-wrap gap-2 animate-fade-in overflow-x-auto pb-2 scrollbar-hide" style={{ animationDelay: '100ms' }}>
-        {(["ALL", "NOT_STARTED", "IN_PROGRESS", "REVIEW", "DONE"] as const).map((s) => (
+        {(["ALL", "NOT_STARTED", "REVIEW", "DONE"] as const).map((s) => (
           <Button
             key={s}
             size="sm"
