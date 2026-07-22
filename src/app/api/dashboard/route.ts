@@ -93,9 +93,12 @@ export async function GET(request: Request) {
     let workloadUserIds: string[] = [];
 
     if (user.role === ROLES.ADMIN) {
-      // Admin sees workload for all users
-      const allUsers = await prisma.user.findMany({ select: { id: true } });
-      workloadUserIds = allUsers.map(u => u.id);
+      // Admin sees workload for all staff users
+      const allStaff = await prisma.user.findMany({ 
+        where: { role: { not: ROLES.CLIENT } },
+        select: { id: true } 
+      });
+      workloadUserIds = allStaff.map(u => u.id);
     } else if (user.role === ROLES.MANAGER) {
       // Manager sees workload for staff who share client assignments with them
       const sharedClients = await prisma.client.findMany({
@@ -127,7 +130,10 @@ export async function GET(request: Request) {
     });
 
     const users = await prisma.user.findMany({
-      where: { id: { in: workloadUserIds } },
+      where: { 
+        id: { in: workloadUserIds },
+        role: { not: ROLES.CLIENT }
+      },
       select: { id: true, name: true, email: true }
     });
 
