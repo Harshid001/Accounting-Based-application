@@ -57,6 +57,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     if (body.dueDate) updateData.dueDate = new Date(body.dueDate)
+    if (body.manualOverride !== undefined) {
+      updateData.manualOverride = body.manualOverride;
+    }
+    
+    // HARD ENFORCEMENT: TDS and ROC must ALWAYS have manualOverride = true
+    if (item.type === "TDS" || item.type === "ROC") {
+      updateData.manualOverride = true;
+    }
 
     const updatedItem = await prisma.$transaction(async (tx) => {
       const res = await tx.complianceItem.update({

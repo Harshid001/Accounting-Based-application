@@ -15,9 +15,11 @@ export async function spawnNextRecurringComplianceItem(
 ) {
   const db = tx || prisma;
   
-  // 1. If manual override is on, or if the type is ROC, NEVER auto-spawn.
-  // ROC due dates are tied to AGM dates and require a real rules engine, not a fixed interval.
-  if (item.manualOverride || item.type === "ROC") {
+  // 1. If manual override is on, or if the type is ROC or TDS, NEVER auto-spawn.
+  // ROC due dates are tied to AGM dates.
+  // TDS involves two distinct cadences simultaneously (return vs payment).
+  // Both require a real rules engine, not a fixed interval.
+  if (item.manualOverride || item.type === "ROC" || item.type === "TDS") {
     console.log(`[RecurrenceEngine] Skipped auto-spawn for item ${item.id} (override: ${item.manualOverride}, type: ${item.type})`);
     return null;
   }
