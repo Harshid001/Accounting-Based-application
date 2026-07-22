@@ -24,6 +24,9 @@ export async function spawnNextRecurringComplianceItem(
 
   // 2. Fetch the client's service subscription to get their specific filing frequency.
   // We no longer guess defaults based on type (e.g. GST QRMP scheme has different intervals).
+  // Note on TDS: TDS has a dual cadence (quarterly return, monthly payment). Because `filingFrequency`
+  // is currently a single string, TDS clients will need `manualOverride = true` indefinitely until
+  // a dedicated tax rules engine splits this into two tracked obligations.
   let serviceName = "";
   if (item.type === "GST") serviceName = "GST Filing";
   else if (item.type === "INCOME_TAX") serviceName = "Income Tax Return";
