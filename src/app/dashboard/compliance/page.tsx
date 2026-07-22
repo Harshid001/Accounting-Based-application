@@ -138,10 +138,11 @@ export default function GlobalCompliancePage() {
   }
 
   return (
-    <div className="space-y-6 md:space-y-8 animate-slide-up">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground font-heading tracking-tight">Compliance Tracker</h1>
+    <div className="space-y-8 animate-slide-up">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground/90">Compliance Tracker</h1>
+          <p className="text-sm text-muted-foreground">Track filings and statutory deadlines across all clients.</p>
         </div>
         {session?.user?.role !== "DATA_ENTRY" && (
           <Dialog open={isNewModalOpen} onOpenChange={setIsNewModalOpen}>
@@ -220,7 +221,7 @@ export default function GlobalCompliancePage() {
       </div>
 
       {/* Filters bar */}
-      <div className="grid grid-cols-2 md:flex md:flex-wrap gap-3 md:gap-4 rounded-3xl glass-card p-4 md:p-6 shadow-sm animate-fade-in" style={{ animationDelay: '100ms' }}>
+      <div className="bg-card border border-border rounded-2xl shadow-sm grid grid-cols-2 md:flex md:flex-wrap gap-3 md:gap-4 p-4 md:p-5 animate-fade-in" style={{ animationDelay: '100ms' }}>
         <div className="flex flex-col gap-1.5 flex-1">
           <Label className="text-xs text-muted-foreground">Category</Label>
           <Select value={typeFilter} onValueChange={v => setTypeFilter(v || "all")}>
@@ -275,20 +276,24 @@ export default function GlobalCompliancePage() {
       {/* Items table & mobile cards */}
       <div className="animate-fade-in" style={{ animationDelay: '200ms' }}>
         {loading ? (
-          <div className="rounded-3xl glass-card flex items-center justify-center py-12 text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          <div className="bg-card border border-border rounded-2xl shadow-sm flex items-center justify-center py-16 text-sm text-muted-foreground gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
             Loading trackers...
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-3xl glass-card flex items-center justify-center py-12 text-sm text-muted-foreground">
-            No filings match the filters.
+          <div className="bg-card border border-border rounded-2xl shadow-sm flex flex-col items-center justify-center py-16 gap-3 text-center">
+            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+              <Loader2 className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium text-foreground">No filings match the filters</p>
+            <p className="text-xs text-muted-foreground">Try adjusting the filters or create a new filing.</p>
           </div>
         ) : (
           <>
             {/* Mobile Cards */}
             <div className="grid grid-cols-1 gap-4 md:hidden">
               {items.map((item) => (
-                <div key={item.id} className="rounded-2xl glass-card p-4 flex flex-col gap-3 relative overflow-hidden">
+                <div key={item.id} className="bg-card border border-border rounded-2xl shadow-sm p-4 flex flex-col gap-3 relative overflow-hidden hover:shadow-md transition-shadow duration-200">
                   <div className="flex justify-between items-start gap-2">
                     <div className="flex flex-col">
                       <span className="font-bold text-foreground text-base">{item.client.name}</span>
@@ -327,21 +332,21 @@ export default function GlobalCompliancePage() {
             </div>
 
             {/* Desktop Table */}
-            <div className="hidden md:block rounded-3xl glass-card overflow-hidden">
+            <div className="hidden md:block bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
               <Table>
-                <TableHeader className="bg-muted/20">
-                  <TableRow className="border-border/30 hover:bg-transparent">
-                    <TableHead className="text-foreground font-semibold">Client</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Notes</TableHead>
+                <TableHeader>
+                  <TableRow className="border-b border-border hover:bg-transparent">
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Client</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Category</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Due Date</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.client.name}</TableCell>
+                    <TableRow key={item.id} className="transition-colors duration-150 hover:bg-muted/30 border-b border-border/50">
+                      <TableCell className="font-medium text-foreground">{item.client.name}</TableCell>
                       <TableCell className="font-semibold text-muted-foreground">{item.type}</TableCell>
                       <TableCell>{new Date(item.dueDate).toLocaleDateString()}</TableCell>
                       <TableCell>

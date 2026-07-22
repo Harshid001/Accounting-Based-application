@@ -25,8 +25,8 @@ export default async function StaffLayout({
   return (
     <div className="flex min-h-screen bg-background text-foreground relative selection:bg-primary/30">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border bg-card/80 backdrop-blur-md shadow-sm z-10 sticky top-0 h-screen print:hidden">
-        <div className="flex items-center gap-3 border-b border-border px-6 py-5">
+      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border/50 bg-background z-10 sticky top-0 h-screen print:hidden">
+        <div className="flex items-center gap-3 border-b border-border/50 px-6 py-5">
           <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold shadow-md">
             A
           </div>
@@ -34,7 +34,7 @@ export default async function StaffLayout({
             AFMS
           </span>
         </div>
-        <div className="flex-1 overflow-y-auto p-3">
+        <div className="flex-1 overflow-y-auto p-4 space-y-1">
           <SidebarNav />
         </div>
       </aside>
@@ -42,7 +42,7 @@ export default async function StaffLayout({
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col relative w-full">
         {/* Sticky Header with Notch Support */}
-        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-card/70 backdrop-blur-xl px-4 md:px-8 pt-[env(safe-area-inset-top)] h-[calc(73px+env(safe-area-inset-top))] print:hidden">
+        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border/50 bg-background/95 backdrop-blur-sm px-4 md:px-10 pt-[env(safe-area-inset-top)] h-[calc(73px+env(safe-area-inset-top))] print:hidden">
           <div className="flex items-center gap-3">
             {/* Custom AFMS Logo */}
             <div className="flex size-9 md:hidden items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm ring-1 ring-border">
@@ -56,7 +56,7 @@ export default async function StaffLayout({
               AFMS
             </h2>
             
-            <h2 className="hidden md:block text-xl font-bold tracking-tight text-foreground">
+            <h2 className="hidden md:block text-2xl font-semibold tracking-tight text-foreground/90">
               Dashboard
             </h2>
           </div>
@@ -66,7 +66,7 @@ export default async function StaffLayout({
         </header>
 
         {/* Page Content: padding bottom on mobile to clear BottomNav */}
-        <main className="flex-1 p-4 md:p-8 animate-fade-in pb-[calc(80px+env(safe-area-inset-bottom))] md:pb-8 w-full max-w-full overflow-x-hidden print:p-0 print:pb-0">
+        <main className="flex-1 p-4 md:p-10 animate-fade-in pb-[calc(80px+env(safe-area-inset-bottom))] md:pb-10 w-full max-w-full overflow-x-hidden print:p-0 print:pb-0">
           <GestureProvider>
             <GlobalBackButton />
             {children}
@@ -75,7 +75,7 @@ export default async function StaffLayout({
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <div className="print:hidden">
+      <div className="md:hidden print:hidden">
         <BottomNav />
       </div>
     </div>

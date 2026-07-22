@@ -102,31 +102,32 @@ export default function ClientsPage() {
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'ACTIVE': return 'default'
-      case 'ONBOARDING': return 'secondary'
+      case 'ACTIVE': return 'success'
+      case 'ONBOARDING': return 'warning'
       case 'INACTIVE': return 'destructive'
       default: return 'outline'
     }
   }
 
   return (
-    <div className="space-y-6 md:space-y-8 animate-slide-up">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground font-heading tracking-tight">Clients</h1>
+    <div className="space-y-8 animate-slide-up">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground/90">Clients</h1>
+          <p className="text-sm text-muted-foreground">Manage your firm's client portfolio.</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="relative flex-1 sm:w-64">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Search clients..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-9 pr-4 rounded-xl border border-input bg-background/50 backdrop-blur-sm text-sm outline-none transition-all focus:border-primary focus:ring-1 focus:ring-primary"
+              className="w-full h-9 pl-9 pr-4 rounded-xl border border-input bg-background text-sm outline-none transition-all focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
-          <Link href="/dashboard/clients/new" className={buttonVariants({ variant: "default", size: "icon", className: "h-10 w-10 shrink-0 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all bg-primary text-primary-foreground" })}>
+          <Link href="/dashboard/clients/new" className={buttonVariants({ variant: "default", size: "icon", className: "h-9 w-9 shrink-0 rounded-xl" })}>
             <Plus className="h-5 w-5" strokeWidth={2.5} />
           </Link>
         </div>
@@ -134,15 +135,19 @@ export default function ClientsPage() {
 
       <div className="animate-fade-in" style={{ animationDelay: '100ms' }}>
         {clients.length === 0 ? (
-          <div className="rounded-3xl glass-card text-center py-12 text-muted-foreground">
-            No clients found.
+          <div className="bg-card border border-border rounded-2xl shadow-sm flex flex-col items-center justify-center py-16 gap-3 text-center">
+            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+              <Search className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium text-foreground">No clients yet</p>
+            <p className="text-xs text-muted-foreground">Add your first client to get started.</p>
           </div>
         ) : (
           <>
             {/* Mobile Cards */}
             <div className="grid grid-cols-1 gap-4 md:hidden">
               {filteredClients.map((client) => (
-                <div key={client.id} className="rounded-2xl glass-card p-4 flex flex-col gap-3 relative overflow-hidden">
+                <div key={client.id} className="bg-card border border-border rounded-2xl shadow-sm p-4 flex flex-col gap-3 relative overflow-hidden hover:shadow-md transition-shadow duration-200">
                   <div className="flex justify-between items-start gap-2">
                     <div className="flex flex-col gap-0.5">
                       <div className="flex items-center gap-2">
@@ -197,21 +202,27 @@ export default function ClientsPage() {
             </div>
 
             {/* Desktop Table */}
-            <div className="hidden md:block rounded-3xl glass-card overflow-hidden">
+            <div className="hidden md:block bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
               <Table>
-                <TableHeader className="bg-muted/20">
-                  <TableRow className="border-border/30 hover:bg-transparent">
-                    <TableHead className="text-foreground font-semibold">Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>PAN</TableHead>
-                    <TableHead>Assigned To</TableHead>
-                    <TableHead>Actions</TableHead>
+                <TableHeader>
+                  <TableRow className="border-b border-border hover:bg-transparent">
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Name</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Type</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">PAN</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Assigned To</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredClients.map((client) => (
-                    <TableRow key={client.id}>
+                  {filteredClients.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-12 text-sm text-muted-foreground">
+                        No clients match your search.
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredClients.map((client) => (
+                    <TableRow key={client.id} className="transition-colors duration-150 hover:bg-muted/30 border-b border-border/50">
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           {client.isPinned && <Pin className="h-3.5 w-3.5 text-amber-500 fill-amber-500/20" />}

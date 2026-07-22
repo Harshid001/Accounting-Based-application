@@ -78,10 +78,10 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 }
 
 const STATUS_STYLE: Record<TaskStatus, string> = {
-  NOT_STARTED: "bg-amber-100 text-amber-800 hover:bg-amber-100",
-  IN_PROGRESS: "bg-blue-100 text-blue-800 hover:bg-blue-100",
-  REVIEW: "bg-purple-100 text-purple-800 hover:bg-purple-100",
-  DONE: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
+  NOT_STARTED: "bg-muted/50 text-foreground border-border/60",
+  IN_PROGRESS: "bg-muted/50 text-foreground border-border/60",
+  REVIEW: "bg-muted/50 text-foreground border-border/60",
+  DONE: "bg-muted/50 text-foreground border-border/60",
 }
 
 export function TaskDashboard() {
@@ -162,11 +162,11 @@ export function TaskDashboard() {
     statusFilter === "ALL" ? tasks : tasks.filter((t) => t.status === statusFilter)
 
   return (
-    <div className="space-y-6 md:space-y-8 animate-slide-up">
+    <div className="space-y-8 animate-slide-up">
       <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground font-heading tracking-tight">Tasks</h1>
-          <p className="text-sm text-muted-foreground font-medium">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground/90">Tasks</h1>
+          <p className="text-sm text-muted-foreground">
             {role && isStaffLeadership(role)
               ? "Every task across your assigned clients."
               : "Tasks assigned to you."}
@@ -240,17 +240,20 @@ export function TaskDashboard() {
             )}
       </div>
 
-      <div className="flex flex-wrap gap-2 animate-fade-in overflow-x-auto pb-2 scrollbar-hide" style={{ animationDelay: '100ms' }}>
-        {(["ALL", "NOT_STARTED", "REVIEW", "DONE"] as const).map((s) => (
-          <Button
+      <div className="flex flex-wrap gap-2 animate-fade-in" style={{ animationDelay: '100ms' }}>
+        {(["ALL", "NOT_STARTED", "IN_PROGRESS", "REVIEW", "DONE"] as const).map((s) => (
+          <button
             key={s}
-            size="sm"
-            variant={statusFilter === s ? "default" : "outline"}
             onClick={() => setStatusFilter(s)}
-            className={statusFilter !== s ? "bg-card/50 backdrop-blur-sm border-border/50" : "shadow-md shadow-primary/20"}
+            className={cn(
+              "inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all duration-150",
+              statusFilter === s
+                ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                : "bg-card text-muted-foreground border-border hover:bg-muted/50 hover:text-foreground"
+            )}
           >
-            {s === "ALL" ? "All" : STATUS_LABEL[s]}
-          </Button>
+            {s === "ALL" ? "All" : STATUS_LABEL[s as TaskStatus]}
+          </button>
         ))}
       </div>
 
@@ -267,8 +270,12 @@ export function TaskDashboard() {
           </Button>
         </div>
       ) : visibleTasks.length === 0 ? (
-        <div className="rounded-3xl glass-card px-4 py-16 text-center text-sm font-medium text-muted-foreground animate-fade-in">
-          No tasks match this filter.
+        <div className="bg-card border border-border rounded-2xl shadow-sm px-4 py-16 flex flex-col items-center justify-center gap-3 text-center animate-fade-in">
+          <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+            <Loader2 className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium text-foreground">No tasks match this filter</p>
+          <p className="text-xs text-muted-foreground">Try selecting a different status or create a new task.</p>
         </div>
       ) : (
         <div className="animate-fade-in" style={{ animationDelay: '200ms' }}>
@@ -278,7 +285,7 @@ export function TaskDashboard() {
               const canEditStatus = !!role && (isStaffLeadership(role) || task.assignedTo?.id === userId)
               
               return (
-                <div key={task.id} className="rounded-2xl glass-card p-4 flex flex-col gap-3 relative overflow-hidden">
+                <div key={task.id} className="bg-card border border-border rounded-2xl shadow-sm p-4 flex flex-col gap-3 relative overflow-hidden hover:shadow-md transition-shadow duration-200">
                   <div className="flex justify-between items-start gap-2">
                     <div className="flex flex-col gap-1">
                       <span className="font-bold text-foreground text-base leading-tight">{task.title}</span>
@@ -366,15 +373,15 @@ export function TaskDashboard() {
           </div>
 
           {/* Desktop Table */}
-          <div className="hidden md:block rounded-3xl glass-card overflow-hidden">
+          <div className="hidden md:block bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
             <Table>
-              <TableHeader className="bg-muted/20">
-                <TableRow className="border-border/30 hover:bg-transparent">
-                  <TableHead className="text-foreground font-semibold">Task</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Assigned to</TableHead>
-                  <TableHead>Due</TableHead>
-                  <TableHead>Status</TableHead>
+              <TableHeader>
+                <TableRow className="border-b border-border hover:bg-transparent">
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Task</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Client</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Assigned to</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Due</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</TableHead>
                   {role && canReassignTask(role) && <TableHead className="w-10" />}
                 </TableRow>
               </TableHeader>
@@ -384,15 +391,15 @@ export function TaskDashboard() {
                     !!role && (isStaffLeadership(role) || task.assignedTo?.id === userId)
 
                   return (
-                    <TableRow key={task.id}>
-                      <TableCell className="font-medium text-slate-900">
+                    <TableRow key={task.id} className="transition-colors duration-150 hover:bg-muted/30 border-b border-border/50">
+                      <TableCell className="font-medium text-foreground">
                         {task.title}
                       </TableCell>
-                      <TableCell className="text-slate-600">{task.client?.name ?? "—"}</TableCell>
-                      <TableCell className="text-slate-600">
+                      <TableCell className="text-muted-foreground">{task.client?.name ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground">
                         {task.assignedTo?.name ?? "Unassigned"}
                       </TableCell>
-                      <TableCell className="text-slate-600">
+                      <TableCell className="text-muted-foreground">
                         {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "—"}
                       </TableCell>
                       <TableCell>

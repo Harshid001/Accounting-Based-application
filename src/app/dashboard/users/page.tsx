@@ -139,11 +139,10 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="space-y-6 md:space-y-8 animate-slide-up">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground font-heading tracking-tight">User Management</h1>
-        </div>
+    <div className="space-y-8 animate-slide-up">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground/90">User Management</h1>
+        <p className="text-sm text-muted-foreground">Manage staff roles and access levels.</p>
       </div>
 
       {error && (
@@ -154,25 +153,29 @@ export default function UsersPage() {
 
       <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
         {loading ? (
-          <div className="rounded-3xl glass-card flex items-center justify-center py-12">
+          <div className="bg-card border border-border rounded-2xl shadow-sm flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : users.length === 0 ? (
-          <div className="rounded-3xl glass-card flex items-center justify-center py-12 text-muted-foreground">
-            No users found.
+          <div className="bg-card border border-border rounded-2xl shadow-sm flex flex-col items-center justify-center py-16 gap-3 text-center">
+            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+              <ShieldAlert className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium text-foreground">No users found</p>
+            <p className="text-xs text-muted-foreground">Staff accounts will appear here once created.</p>
           </div>
         ) : (
           <>
             {/* Mobile Cards */}
             <div className="grid grid-cols-1 gap-4 md:hidden">
               {users.map((user) => (
-                <div key={user.id} className={cn("rounded-2xl glass-card p-4 flex flex-col gap-3 relative overflow-hidden", !user.isActive && "opacity-75 bg-muted/20")}>
+                <div key={user.id} className={cn("bg-card border border-border rounded-2xl shadow-sm p-4 flex flex-col gap-3 relative overflow-hidden transition-shadow duration-200 hover:shadow-md", !user.isActive && "opacity-60")}>  
                   <div className="flex justify-between items-start gap-2">
                     <div className="flex flex-col gap-0.5">
                       <span className="font-bold text-foreground text-base leading-tight">{user.name || "N/A"}</span>
                       <span className="text-xs font-medium text-muted-foreground">{user.email}</span>
                     </div>
-                    <Badge variant={user.isActive ? "default" : "secondary"} className="shrink-0">
+                    <Badge variant={user.isActive ? "success" : "secondary"} className="shrink-0">
                       {user.isActive ? "Active" : "Inactive"}
                     </Badge>
                   </div>
@@ -234,22 +237,29 @@ export default function UsersPage() {
             </div>
 
             {/* Desktop Table */}
-            <div className="hidden md:block rounded-3xl glass-card overflow-hidden">
+            <div className="hidden md:block bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
               <Table>
-                <TableHeader className="bg-muted/20">
-                  <TableRow className="border-border/30 hover:bg-transparent">
-                    <TableHead className="text-foreground font-semibold">Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Linked Client</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                <TableHeader>
+                  <TableRow className="border-b border-border hover:bg-transparent">
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Name</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Email</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Role</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Linked Client</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {users.map((user) => (
-                    <TableRow key={user.id} className={!user.isActive ? "bg-muted/50" : ""}>
-                      <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
+                    <TableRow key={user.id} className={cn("transition-colors duration-150 hover:bg-muted/30 border-b border-border/50", !user.isActive && "opacity-60")}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-xs border border-border/50 ring-2 ring-background shrink-0">
+                            {(user.name || user.email).charAt(0).toUpperCase()}
+                          </div>
+                          <span className="font-medium text-foreground text-sm">{user.name || "N/A"}</span>
+                        </div>
+                      </TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
                         <Select
@@ -291,7 +301,7 @@ export default function UsersPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={user.isActive ? "default" : "secondary"}>
+                        <Badge variant={user.isActive ? "success" : "secondary"}>
                           {user.isActive ? "Active" : "Inactive"}
                         </Badge>
                       </TableCell>
