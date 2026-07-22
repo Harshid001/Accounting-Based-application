@@ -10,9 +10,10 @@ datasource db {
 model User {
   id              String         @id @default(cuid())
   email           String         @unique
+  emailVerified   DateTime?
   password        String?
   name            String?
-  role            String         @default("CLIENT")
+  role            UserRole       @default(CLIENT)
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   clientId        String?
@@ -31,6 +32,8 @@ model Client {
   id              String                @id @default(cuid())
   type            ClientType
   name            String
+  email           String?               @unique
+  phone           String?
   pan             String?
   gstin           String?
   tan             String?
@@ -230,9 +233,38 @@ model Comment {
   @@index([taskId])
 }
 
+model StaffInvite {
+  id              String    @id @default(cuid())
+  email           String
+  role            UserRole
+  tokenHash       String    @unique
+  expiresAt       DateTime
+  usedAt          DateTime?
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+
+  @@index([tokenHash])
+}
+
+model RegistrationVerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
 enum AuthProvider {
   CREDENTIALS
   GOOGLE
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  ACCOUNTANT
+  DATA_ENTRY
+  CLIENT
 }
 
 enum ClientType {

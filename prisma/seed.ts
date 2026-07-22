@@ -4,21 +4,38 @@ import bcrypt from 'bcryptjs'
 const prisma = new PrismaClient()
 
 async function main() {
-  const adminPassword = await bcrypt.hash('admin123', 10)
+  if (process.env.ALLOW_SEED !== 'true') {
+    console.error('ERROR: Seed script aborted.');
+    console.error('To run this script, you must explicitly set ALLOW_SEED=true.');
+    console.error('Do NOT run this against a production database.');
+    process.exit(1);
+  }
 
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@afms.com' },
-    update: {},
-    create: {
-      email: 'admin@afms.com',
-      password: adminPassword,
-      name: 'System Admin',
-      role: 'ADMIN',
-    },
-  })
+  // ─── Dev-only staff users ────────────────────────────────────────────────
+  // Cost factor 12 to match production routes.
+  const seedUsers = [
+    // Note: The three dev test users (manager, accountant, dataentry) were deleted 
+    // due to weak credentials and should only be generated dynamically out-of-band.
+    { email: 'admin@afms.com', password: 'admin123', name: 'System Admin', role: 'ADMIN' },
+  ] as const
 
-  console.log({ admin })
+  for (const u of seedUsers) {
+    const hashed = await bcrypt.hash(u.password, 12)
+    const user = await prisma.user.upsert({
+      where:  { email: u.email },
+      update: { role: u.role },
+      create: {
+        email:    u.email,
+        password: hashed,
+        name:     u.name,
+        role:     u.role,
+        isActive: true,
+      },
+    })
+    console.log(`Upserted user: ${user.email} (${user.role})`)
+  }
 
+  // ─── Services ─────────────────────────────────────────────────────────────
   const serviceNames = [
     'Accounting',
     'Bookkeeping',
@@ -27,13 +44,13 @@ async function main() {
     'Sales Tax / VAT',
     'TDS',
     'Payroll',
-    'Audit Services'
+    'Audit Services',
   ]
 
   console.log('Seeding services...')
   for (const name of serviceNames) {
     const service = await prisma.service.upsert({
-      where: { name },
+      where:  { name },
       update: {},
       create: { name },
     })
@@ -50,3 +67,4 @@ main()
     await prisma.$disconnect()
     process.exit(1)
   })
+
