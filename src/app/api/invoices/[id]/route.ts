@@ -1,26 +1,54 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { role, id: userId } = session.user;
     const { id } = await params;
 
     const invoice = await prisma.invoice.findUnique({
       where: { id },
       include: {
-        client: true,
+        client: {
+          include: { assignedTo: { select: { id: true } } }
+        },
         lineItems: true,
-        payments: {
-          orderBy: { paymentDate: "desc" }
-        }
+        payments: { orderBy: { paymentDate: "desc" } }
       }
     });
 
     if (!invoice) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    }
+
+    // ADMIN: unrestricted
+    if (role === "ADMIN") {
+      return NextResponse.json(invoice);
+    }
+
+    // CLIENT: only their own client's invoices
+    if (role === "CLIENT") {
+      const userClientId = (session.user as any).clientId;
+      if (!userClientId || invoice.clientId !== userClientId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      return NextResponse.json(invoice);
+    }
+
+    // MANAGER / ACCOUNTANT / DATA_ENTRY: must be assigned to this invoice's client
+    const isAssigned = invoice.client.assignedTo.some((u: { id: string }) => u.id === userId);
+    if (!isAssigned) {
+      return NextResponse.json({ error: "Forbidden: Not assigned to this client" }, { status: 403 });
     }
 
     return NextResponse.json(invoice);
@@ -34,7 +62,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userRole = req.headers.get("x-mock-role") || "ADMIN"; // TODO: get from auth session
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userRole = session.user.role;
     if (!["ADMIN", "MANAGER", "ACCOUNTANT"].includes(userRole)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

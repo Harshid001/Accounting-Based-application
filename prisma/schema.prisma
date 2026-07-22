@@ -283,6 +283,7 @@ enum ComplianceType {
   INCOME_TAX
   SALES_TAX_VAT
   TDS
+  ROC
 }
 
 enum ComplianceStatus {

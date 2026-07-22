@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = req.headers.get("x-mock-userid") || "dummy_user";
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userId = session.user.id;
     const { id } = await params;
     const body = await req.json();
     const { content } = body;
@@ -50,8 +56,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = req.headers.get("x-mock-userid") || "dummy_user";
-    const userRole = req.headers.get("x-mock-role") || "CLIENT";
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userId = session.user.id;
+    const userRole = session.user.role;
     const { id } = await params;
 
     const comment = await prisma.comment.findUnique({ where: { id } });

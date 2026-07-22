@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { PrismaClient } from "@prisma/client";
-import { clearDatabase } from "./setup";
+import { clearDatabase, setMockSession, clearMockSession } from "./setup";
 import { getRevenueReportData } from "../src/lib/reports";
 import { GET as exportReport } from "../src/app/api/reports/export/route";
 
@@ -34,7 +34,7 @@ describe("Reporting API", () => {
         dueDate: new Date(),
         subtotal: 10.01,
         taxTotal: 0,
-        total: 10.01, // Exact decimal
+        total: 10.01,
         status: "DRAFT"
       }
     });
@@ -46,10 +46,14 @@ describe("Reporting API", () => {
         dueDate: new Date(),
         subtotal: 20.02,
         taxTotal: 0,
-        total: 20.02, // Exact decimal
+        total: 20.02,
         status: "DRAFT"
       }
     });
+  });
+
+  afterEach(() => {
+    clearMockSession();
   });
 
   afterAll(async () => {
@@ -79,17 +83,27 @@ describe("Reporting API", () => {
     ).rejects.toThrow();
   });
 
-  it("should successfully generate PDF stream and create audit log", async () => {
+  it("should reject unauthenticated export request (401)", async () => {
+    setMockSession(null);
     const mockReq = { 
       url: "http://localhost:3000/api/reports/export?format=pdf&type=revenue",
-      headers: new Headers({ "x-mock-role": "ADMIN", "x-mock-userid": admin.id })
+      headers: new Headers({})
+    } as any;
+    const res = await exportReport(mockReq);
+    expect(res.status).toBe(401);
+  });
+
+  it("should successfully generate PDF stream and create audit log", async () => {
+    setMockSession({ user: { id: admin.id, role: "ADMIN" } });
+    const mockReq = { 
+      url: "http://localhost:3000/api/reports/export?format=pdf&type=revenue",
+      headers: new Headers({})
     } as any;
     
     const res = await exportReport(mockReq);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("application/pdf");
     
-    // Verify Audit Log
     const audit = await prisma.auditLog.findFirst({
       where: { entityType: "Report", action: "EXPORT" }
     });

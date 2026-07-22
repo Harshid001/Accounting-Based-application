@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getComplianceReportData, getRevenueReportData } from "@/lib/reports";
 import { generateReportPDF } from "@/lib/pdfGenerator";
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 
 // Next.js helper to convert Node Readable stream to Web ReadableStream
 function readableStreamToWeb(nodeStream: NodeJS.ReadableStream): ReadableStream {
@@ -16,8 +18,12 @@ function readableStreamToWeb(nodeStream: NodeJS.ReadableStream): ReadableStream 
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = req.headers.get("x-mock-userid") || "dummy_user";
-    const userRole = req.headers.get("x-mock-role") || "ADMIN";
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userId = session.user.id;
+    const userRole = session.user.role;
     
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type");

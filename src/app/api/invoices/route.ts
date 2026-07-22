@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 
 // Retry helper for atomic invoice generation
 async function generateInvoiceNumber(year: string, maxRetries = 3): Promise<{ seq: number, invoiceNumber: string }> {
@@ -30,7 +32,13 @@ async function generateInvoiceNumber(year: string, maxRetries = 3): Promise<{ se
 
 export async function POST(req: NextRequest) {
   try {
-    const userRole = req.headers.get("x-mock-role") || "ADMIN"; // TODO: get from auth session
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const userRole = session.user.role;
+    const userId = session.user.id;
     if (!["ADMIN", "MANAGER", "ACCOUNTANT"].includes(userRole)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -43,7 +51,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Client scoping check
-    const userId = req.headers.get("x-mock-userid") || "dummy_user";
     if (userRole !== "ADMIN") {
       const client = await prisma.client.findUnique({
         where: { id: clientId },
@@ -164,21 +171,56 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { role, id: userId } = session.user;
     const { searchParams } = new URL(req.url);
-    const clientId = searchParams.get("clientId");
-    
-    const whereClause = clientId ? { clientId } : {};
-    
+    const requestedClientId = searchParams.get("clientId");
+
+    let whereClause: any = {};
+
+    if (role === "CLIENT") {
+      // CLIENTs are strictly scoped to their own linked client — query param is ignored entirely
+      const userClientId = (session.user as any).clientId;
+      if (!userClientId) {
+        return NextResponse.json({ error: "Forbidden: No client profile linked" }, { status: 403 });
+      }
+      whereClause = { clientId: userClientId };
+
+    } else if (role === "ADMIN") {
+      // ADMINs can see everything, optionally filtered by clientId param
+      if (requestedClientId) whereClause = { clientId: requestedClientId };
+
+    } else {
+      // MANAGER / ACCOUNTANT / DATA_ENTRY: only see invoices for clients they are assigned to
+      if (requestedClientId) {
+        // Verify they're actually assigned to the requested client
+        const assigned = await prisma.client.findFirst({
+          where: { id: requestedClientId, assignedTo: { some: { id: userId } } }
+        });
+        if (!assigned) {
+          return NextResponse.json({ error: "Forbidden: Not assigned to this client" }, { status: 403 });
+        }
+        whereClause = { clientId: requestedClientId };
+      } else {
+        // No clientId filter — scope to all their assigned clients
+        whereClause = {
+          client: { assignedTo: { some: { id: userId } } }
+        };
+      }
+    }
+
     const invoices = await prisma.invoice.findMany({
       where: whereClause,
       include: {
-        client: {
-          select: { name: true }
-        }
+        client: { select: { name: true } }
       },
       orderBy: { createdAt: "desc" }
     });
-    
+
     return NextResponse.json(invoices);
   } catch (error) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

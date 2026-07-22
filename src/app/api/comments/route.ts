@@ -66,8 +66,12 @@ export async function GET(req: NextRequest) {
 }
 export async function POST(req: NextRequest) {
   try {
-    const userId = req.headers.get("x-mock-userid") || "dummy_user";
-    const userRole = req.headers.get("x-mock-role") || "CLIENT";
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userId = session.user.id;
+    const userRole = session.user.role;
 
     const body = await req.json();
     const { content, parentType, parentId, mentions } = body;

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 
 import { getServerSession } from "next-auth/next"
 import { authOptions, canAccessClient } from "@/lib/auth"
-
+import { spawnNextRecurringComplianceItem } from "@/lib/recurrence"
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -61,7 +61,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       const res = await tx.complianceItem.update({
         where: { id },
         data: updateData
-      })
+      });
 
       await tx.auditLog.create({
         data: {
@@ -71,7 +71,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           userId: session.user.id,
           diff: updateData
         }
-      })
+      });
+
+      // Auto-spawn next compliance period item when marked FILED or ACKNOWLEDGED
+      const isNewlyFiled = (newStatus === "FILED" || newStatus === "ACKNOWLEDGED") && (oldStatus !== "FILED" && oldStatus !== "ACKNOWLEDGED");
+      if (isNewlyFiled) {
+        await spawnNextRecurringComplianceItem(res, session.user.id, tx);
+      }
 
       return res;
     });

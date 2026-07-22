@@ -1,17 +1,48 @@
+import { vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
 
-// Ensure tests use the shadow/dev DB strictly
+// ── Session Mock ─────────────────────────────────────────────────────────────
+// All routes now use getServerSession(authOptions) instead of x-mock-* headers.
+// This module lets individual tests inject a fake session per-call.
+
+let _mockSession: any = null;
+
+/**
+ * Call this before a test to set the session that getServerSession will return.
+ * Pass `null` to simulate an unauthenticated request (→ 401).
+ */
+export function setMockSession(session: {
+  user: { id: string; role: string; email?: string; clientId?: string };
+} | null) {
+  _mockSession = session;
+}
+
+/** Reset the session back to null after each test if desired. */
+export function clearMockSession() {
+  _mockSession = null;
+}
+
+// Globally mock next-auth/next so every route import gets the fake session.
+vi.mock("next-auth/next", () => ({
+  getServerSession: vi.fn(async () => _mockSession),
+}));
+
+// ── Database Utilities ───────────────────────────────────────────────────────
 const prisma = new PrismaClient();
 
 export async function clearDatabase() {
   await prisma.auditLog.deleteMany({});
   await prisma.notification.deleteMany({});
   await prisma.comment.deleteMany({});
-  await prisma.invoice.deleteMany({});
+  await prisma.paymentIntent.deleteMany({});
   await prisma.payment.deleteMany({});
+  await prisma.invoiceLineItem.deleteMany({});
+  await prisma.invoice.deleteMany({});
   await prisma.complianceItem.deleteMany({});
   await prisma.document.deleteMany({});
   await prisma.task.deleteMany({});
+  await prisma.serviceSubscription.deleteMany({});
+  await prisma.service.deleteMany({});
   await prisma.client.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.invoiceCounter.deleteMany({});

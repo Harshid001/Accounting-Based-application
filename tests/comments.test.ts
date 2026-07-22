@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, afterAll, afterEach } from "vitest";
 import { PrismaClient } from "@prisma/client";
-import { clearDatabase } from "./setup";
+import { clearDatabase, setMockSession, clearMockSession } from "./setup";
 import { POST as createComment } from "../src/app/api/comments/route";
 import { PATCH as patchComment, DELETE as deleteComment } from "../src/app/api/comments/[id]/route";
 
@@ -39,6 +39,10 @@ describe("Comments API", () => {
     });
   });
 
+  afterEach(() => {
+    clearMockSession();
+  });
+
   afterAll(async () => {
     await clearDatabase();
     await prisma.$disconnect();
@@ -50,13 +54,24 @@ describe("Comments API", () => {
         INSERT INTO "Comment" ("id", "content", "authorId", "taskId", "documentId", "updatedAt")
         VALUES ('comment_constraint_test', 'test', '${adminUser.id}', '${task.id}', '${doc.id}', NOW())
       `)
-    ).rejects.toThrow(); // Should throw PrismaClientKnownRequestError for CHECK constraint violation
+    ).rejects.toThrow();
+  });
+
+  it("should reject unauthenticated comment creation (401)", async () => {
+    setMockSession(null);
+    const req = {
+      json: async () => ({ content: "anon", parentType: "task", parentId: task.id }),
+      headers: new Headers({})
+    } as any;
+    const res = await createComment(req);
+    expect(res.status).toBe(401);
   });
 
   it("should block CLIENT from commenting on Task", async () => {
+    setMockSession({ user: { id: clientUser.id, role: "CLIENT", clientId: client.id } });
     const clientTaskReq = {
       json: async () => ({ content: "What is this task?", parentType: "task", parentId: task.id }),
-      headers: new Headers({ "x-mock-role": "CLIENT", "x-mock-userid": clientUser.id })
+      headers: new Headers({})
     } as any;
     const clientTaskRes = await createComment(clientTaskReq);
     expect(clientTaskRes.status).toBe(403);
@@ -66,6 +81,7 @@ describe("Comments API", () => {
     let createdComment: any;
 
     it("should create valid comment and notify mentioned users", async () => {
+      setMockSession({ user: { id: accUser.id, role: "ACCOUNTANT" } });
       const validCommentReq = {
         json: async () => ({ 
           content: "Please review this document @client", 
@@ -73,7 +89,7 @@ describe("Comments API", () => {
           parentId: doc.id,
           mentions: [clientUser.id, "fake_id"] 
         }),
-        headers: new Headers({ "x-mock-role": "ACCOUNTANT", "x-mock-userid": accUser.id })
+        headers: new Headers({})
       } as any;
       
       const validCommentRes = await createComment(validCommentReq);
@@ -87,6 +103,7 @@ describe("Comments API", () => {
     it("should strip mentions for unauthorized users", async () => {
       const notifsBefore = await prisma.notification.count({ where: { recipientId: clientUser.id } });
       
+      setMockSession({ user: { id: adminUser.id, role: "ADMIN" } });
       const invalidMentionReq = {
         json: async () => ({ 
           content: "Hey @client look at this internal task", 
@@ -94,7 +111,7 @@ describe("Comments API", () => {
           parentId: task.id,
           mentions: [clientUser.id] // Client can't see Task!
         }),
-        headers: new Headers({ "x-mock-role": "ADMIN", "x-mock-userid": adminUser.id })
+        headers: new Headers({})
       } as any;
       
       const invalidMentionRes = await createComment(invalidMentionReq);
@@ -105,26 +122,29 @@ describe("Comments API", () => {
     });
 
     it("should block admin from editing another user's comment", async () => {
+      setMockSession({ user: { id: adminUser.id, role: "ADMIN" } });
       const editReqAdmin = {
         json: async () => ({ content: "Admin editing" }),
-        headers: new Headers({ "x-mock-role": "ADMIN", "x-mock-userid": adminUser.id })
+        headers: new Headers({})
       } as any;
       const editResAdmin = await patchComment(editReqAdmin, { params: Promise.resolve({ id: createdComment.id }) } as any);
       expect(editResAdmin.status).toBe(403);
     });
 
     it("should allow author to edit their own comment", async () => {
+      setMockSession({ user: { id: accUser.id, role: "ACCOUNTANT" } });
       const editReqAcc = {
         json: async () => ({ content: "Accountant editing own" }),
-        headers: new Headers({ "x-mock-role": "ACCOUNTANT", "x-mock-userid": accUser.id })
+        headers: new Headers({})
       } as any;
       const editResAcc = await patchComment(editReqAcc, { params: Promise.resolve({ id: createdComment.id }) } as any);
       expect(editResAcc.status).toBe(200);
     });
 
     it("should allow admin to delete another user's comment (Moderation) and log it", async () => {
+      setMockSession({ user: { id: adminUser.id, role: "ADMIN" } });
       const deleteReqAdmin = {
-        headers: new Headers({ "x-mock-role": "ADMIN", "x-mock-userid": adminUser.id })
+        headers: new Headers({})
       } as any;
       const deleteResAdmin = await deleteComment(deleteReqAdmin, { params: Promise.resolve({ id: createdComment.id }) } as any);
       expect(deleteResAdmin.status).toBe(200);

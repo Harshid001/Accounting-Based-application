@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRevenueReportData } from "@/lib/reports";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = req.headers.get("x-mock-userid") || "dummy_user";
-    const userRole = req.headers.get("x-mock-role") || "ADMIN";
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userId = session.user.id;
+    const userRole = session.user.role;
     
     const { searchParams } = new URL(req.url);
     const startDate = searchParams.get("startDate") || undefined;
