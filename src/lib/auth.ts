@@ -109,17 +109,43 @@ export const authOptions: NextAuthOptions = {
             if (dbUser.authProvider !== "GOOGLE") {
               throw new Error("OAuthAccountNotLinked")
             }
-          } else {
-            dbUser = await prisma.user.create({
-              data: {
-                email: email,
-                name: name,
-                authProvider: "GOOGLE",
-                role: "CLIENT",
-                isActive: true
+            if (dbUser.role !== "CLIENT") {
+              if (!dbUser.isActive) {
+                throw new Error("Account is pending approval")
               }
-            })
+              return {
+                id: dbUser.id,
+                email: dbUser.email,
+                name: dbUser.name,
+                role: dbUser.role,
+                clientId: dbUser.clientId
+              }
+            }
           }
+
+          const clientData = await prisma.client.upsert({
+            where: { email },
+            update: {},
+            create: {
+              name: name,
+              email: email,
+              type: "INDIVIDUAL",
+              status: "ACTIVE",
+            },
+          });
+
+          dbUser = await prisma.user.upsert({
+            where: { email },
+            update: { clientId: clientData.id },
+            create: {
+              email: email,
+              name: name,
+              authProvider: "GOOGLE",
+              role: "CLIENT",
+              clientId: clientData.id,
+              isActive: true
+            }
+          });
 
           if (!dbUser.isActive) {
             throw new Error("Account is pending approval")
@@ -143,9 +169,10 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
   },
   callbacks: {
-    async signIn({ user, account }) {
+    async signIn({ user, account, profile }) {
       if (account?.provider === "google") {
         if (!user.email) return false;
+        if (!(profile as any)?.email_verified) return false;
         
         let dbUser = await prisma.user.findUnique({
           where: { email: user.email }
@@ -156,17 +183,38 @@ export const authOptions: NextAuthOptions = {
           if (dbUser.authProvider !== "GOOGLE") {
             return "/login?error=OAuthAccountNotLinked";
           }
-        } else {
-          dbUser = await prisma.user.create({
-            data: {
-              email: user.email,
-              name: user.name || "Google User",
-              authProvider: "GOOGLE",
-              role: "CLIENT",
-              isActive: true
-            }
-          });
+          if (dbUser.role !== "CLIENT") {
+            if (!dbUser.isActive) return "/pending-approval";
+            user.id = dbUser.id;
+            (user as any).role = dbUser.role;
+            (user as any).clientId = dbUser.clientId;
+            return true;
+          }
         }
+        
+        const clientData = await prisma.client.upsert({
+          where: { email: user.email },
+          update: {},
+          create: {
+            name: user.name || user.email,
+            email: user.email,
+            type: "INDIVIDUAL",
+            status: "ACTIVE",
+          },
+        });
+
+        dbUser = await prisma.user.upsert({
+          where: { email: user.email },
+          update: { clientId: clientData.id },
+          create: {
+            email: user.email,
+            name: user.name || "Google User",
+            authProvider: "GOOGLE",
+            role: "CLIENT",
+            clientId: clientData.id,
+            isActive: true
+          }
+        });
         
         if (!dbUser.isActive) {
           return "/pending-approval";
