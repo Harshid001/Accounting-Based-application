@@ -33,6 +33,14 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# database backups — contain real client data (PAN/GSTIN/TAN), never commit
+*.bak
+*.sql
+!prisma/migrations/**/*.sql
+
+# log files
+*.log
+
 # vercel
 .vercel
 
