@@ -14,6 +14,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const { id } = await params
     const body = await req.json()
+    const ipAddress = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
 
     // Find the item first
     const item = await prisma.complianceItem.findUnique({
@@ -69,6 +70,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           entityId: id,
           action: "UPDATE",
           userId: session.user.id,
+          authMethod: "SESSION",
+          ipAddress: ipAddress,
           diff: updateData
         }
       });

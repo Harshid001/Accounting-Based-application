@@ -67,7 +67,7 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
       headers: new Headers({})
     } as any);
     invoiceB = await resB.json();
-  });
+  }, 30000);
 
   afterEach(() => clearMockSession());
 
@@ -98,6 +98,17 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
     setMockSession({ user: { id: clientAUser.id, role: "CLIENT", clientId: clientA.id } });
     const res = await createInvoice({
       json: async () => ({ clientId: clientA.id, dueDate: new Date().toISOString(), lineItems: [{ description: "x", quantity: 1, unitPrice: 100, taxRate: 0 }] }),
+      headers: new Headers({})
+    } as any);
+    expect(res.status).toBe(403);
+  });
+
+  it("CLIENT A cannot POST a comment on CLIENT B's invoice → 403", async () => {
+    setMockSession({ user: { id: clientAUser.id, role: "CLIENT", clientId: clientA.id } });
+    // Attempting to post a comment to invoiceB which belongs to clientB
+    const { POST: createComment } = await import("../src/app/api/comments/route");
+    const res = await createComment({
+      json: async () => ({ content: "Sneaky comment", parentType: "invoice", parentId: invoiceB.id }),
       headers: new Headers({})
     } as any);
     expect(res.status).toBe(403);

@@ -21,26 +21,29 @@ export async function validateReportParams(userId: string, role: string, startDa
 
   // 2. Client Scoping
   let clientIdsFilter: string[] | undefined = undefined;
-
-  if (role === "ACCOUNTANT") {
-    // Determine which clients this accountant can access
+  
+  if (role === "CLIENT") {
+    clientIdsFilter = [clientId!]; // Handled above, must be their own
+  } else if (role === "ADMIN") {
+    if (clientId) {
+      clientIdsFilter = [clientId];
+    }
+  } else if (role === "ACCOUNTANT" || role === "MANAGER" || role === "DATA_ENTRY") {
     const assignedClients = await prisma.client.findMany({
-      where: { assignedTo: { some: { id: userId } } },
+      where: {
+        assignedTo: { some: { id: userId } }
+      },
       select: { id: true }
     });
-    const allowedIds = assignedClients.map(c => c.id);
-
+    const assignedIds = assignedClients.map(c => c.id);
+    
     if (clientId) {
-      if (!allowedIds.includes(clientId)) {
-        throw new Error("FORBIDDEN: Unauthorized for this client");
+      if (!assignedIds.includes(clientId)) {
+        throw new Error("FORBIDDEN: You do not have access to this client's data.");
       }
       clientIdsFilter = [clientId];
     } else {
-      clientIdsFilter = allowedIds;
-    }
-  } else if (role === "ADMIN" || role === "MANAGER") {
-    if (clientId) {
-      clientIdsFilter = [clientId];
+      clientIdsFilter = assignedIds;
     }
   } else {
     throw new Error("FORBIDDEN: Access denied");

@@ -61,21 +61,23 @@ model ServiceSubscription {
   id        String    @id @default(cuid())
   clientId  String
   serviceId String
-  startDate DateTime  @default(now())
-  invoices  Invoice[]
-  client    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  service   Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  startDate        DateTime  @default(now())
+  filingFrequency  String?   // e.g. "MONTHLY", "QUARTERLY", "ANNUALLY"
+  invoices         Invoice[]
+  client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  service          Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 }
 
 model ComplianceItem {
   id           String           @id @default(cuid())
   clientId     String
   type         ComplianceType
-  status       ComplianceStatus @default(PENDING)
-  dueDate      DateTime
-  filedDate    DateTime?
-  notes        String?
-  Comment      Comment[]
+  status           ComplianceStatus @default(PENDING)
+  dueDate          DateTime
+  filedDate        DateTime?
+  notes            String?
+  manualOverride   Boolean          @default(true)
+  Comment          Comment[]
   client       Client           @relation(fields: [clientId], references: [id])
   Notification Notification[]
   tasks        Task[]
@@ -104,6 +106,8 @@ model AuditLog {
   entityId   String
   action     String
   userId     String
+  authMethod String?  // E.g., "SESSION", "API_KEY"
+  ipAddress  String?
   diff       Json?
   createdAt  DateTime @default(now())
 }

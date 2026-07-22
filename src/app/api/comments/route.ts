@@ -52,6 +52,25 @@ export async function GET(req: NextRequest) {
       else return NextResponse.json({ error: "Invalid parent type" }, { status: 400 });
     }
 
+    const { role, id: userId } = session.user;
+    
+    // Non-ADMIN staff must be scoped to their assigned clients
+    if (role === "ACCOUNTANT" || role === "MANAGER" || role === "DATA_ENTRY") {
+      const assignedClients = await prisma.client.findMany({
+        where: { assignedTo: { some: { id: userId } } },
+        select: { id: true }
+      });
+      const assignedIds = assignedClients.map(c => c.id);
+      
+      // We ensure the comments they fetch are linked to their assigned clients.
+      // (For firm-level tasks where clientId is null, they can still see them since they are internal staff,
+      // so we use an OR clause: either clientId is in assignedIds, or clientId is null)
+      where.OR = [
+        { clientId: { in: assignedIds } },
+        { clientId: null }
+      ];
+    }
+
     const comments = await prisma.comment.findMany({
       where,
       include: { User: { select: { id: true, name: true } } },
