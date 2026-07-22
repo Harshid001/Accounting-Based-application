@@ -41,7 +41,8 @@ export default function GlobalCompliancePage() {
 
       const res = await fetch(`/api/compliance?${queryParams.toString()}`)
       if (res.ok) {
-        const data = await res.json()
+        const _resData = await res.json()
+          const data = _resData.data || _resData
         setItems(data)
       }
     } catch (err) {
@@ -55,7 +56,8 @@ export default function GlobalCompliancePage() {
     try {
       const res = await fetch("/api/clients")
       if (res.ok) {
-        const data = await res.json()
+        const _resData = await res.json()
+          const data = _resData.data || _resData
         setClientsList(data)
       }
     } catch (err) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import crypto from "crypto"
 import { Prisma } from "@prisma/client"
+import { getSystemActorId } from "@/lib/constants"
 
 export async function POST(req: Request) {
   try {
@@ -55,13 +56,24 @@ export async function POST(req: Request) {
         if (!existing) {
           const amountRupees = new Prisma.Decimal(amountPaise).div(100)
           
-          await tx.payment.create({
+          const payment = await tx.payment.create({
             data: {
               invoiceId: intent.invoiceId,
               amount: amountRupees,
               method: "RAZORPAY",
               gatewayEventId,
               referenceId: orderId,
+            }
+          })
+
+          const systemUserId = await getSystemActorId();
+          await tx.auditLog.create({
+            data: {
+              entityType: "Payment",
+              entityId: payment.id,
+              action: "CREATE",
+              userId: systemUserId,
+              diff: JSON.parse(JSON.stringify({ payment, source: "webhook" }))
             }
           })
 

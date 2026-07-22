@@ -64,7 +64,7 @@ export async function validateEntityAccess(userId: string, role: string, parentT
     }
     const client = await prisma.client.findUnique({
       where: { id: entityClientId },
-      include: { assignedTo: true }
+      include: { assignedTo: { select: { id: true } } }
     });
     if (!client || !client.assignedTo.some(u => u.id === userId)) {
       throw new Error("FORBIDDEN: Unauthorized for this client's entities");
@@ -85,19 +85,30 @@ export async function validateEntityAccess(userId: string, role: string, parentT
   throw new Error("FORBIDDEN: Role not recognized");
 }
 
-// Ensure mentions are valid IDs and also authorized to see this entity
+/**
+ * Validate that mentioned user IDs are real users who have access to the parent entity.
+ *
+ * N+1 FIX: Batch-fetches all mentioned users in a single query instead of
+ * doing one findUnique per mention. Access checks still run per user but
+ * with pre-fetched data where possible.
+ */
 export async function validateMentions(mentions: string[], parentType: string, parentId: string) {
-  const validMentions = [];
-  for (const uid of mentions) {
-    const user = await prisma.user.findUnique({ where: { id: uid } });
-    if (!user) continue; // User doesn't exist, ignore or throw? We'll ignore invalid tags.
-    
+  if (mentions.length === 0) return [];
+
+  // Batch-fetch all mentioned users in one query
+  const users = await prisma.user.findMany({
+    where: { id: { in: mentions } },
+    select: { id: true, role: true, clientId: true },
+  });
+
+  const validMentions: string[] = [];
+  for (const user of users) {
     try {
       // Check if this mentioned user is actually allowed to see the entity
       await validateEntityAccess(user.id, user.role, parentType, parentId);
       validMentions.push(user.id);
-    } catch (e) {
-      // They can't see it, so they shouldn't be mentioned.
+    } catch {
+      // They can't see it, so they shouldn't be mentioned — silently skip.
     }
   }
   return validMentions;

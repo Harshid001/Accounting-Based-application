@@ -34,7 +34,8 @@ export default function ClientsPage() {
           }
         })
         if (res.ok) {
-          const data = await res.json()
+          const _resData = await res.json()
+          const data = _resData.data || _resData
           setClients(data)
         }
       } catch (err) {
@@ -72,7 +73,8 @@ export default function ClientsPage() {
       if (res.ok) {
         setClients(clients.filter(c => c.id !== client.id))
       } else {
-        const data = await res.json()
+        const _resData = await res.json()
+          const data = _resData.data || _resData
         alert(data.error || "Failed to delete client")
       }
     } catch (e) {

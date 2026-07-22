@@ -27,7 +27,8 @@ export default function ClientDocumentsPage() {
     try {
       const res = await fetch(`/api/clients/${clientId}/documents`)
       if (res.ok) {
-        const data = await res.json()
+        const _resData = await res.json()
+          const data = _resData.data || _resData
         setDocuments(data)
       }
     } catch (err) {

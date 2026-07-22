@@ -32,7 +32,6 @@ export async function spawnNextRecurringComplianceItem(
   let serviceName = "";
   if (item.type === "GST") serviceName = "GST Filing";
   else if (item.type === "INCOME_TAX") serviceName = "Income Tax Return";
-  else if (item.type === "TDS") serviceName = "TDS Return";
   else if (item.type === "SALES_TAX_VAT") serviceName = "Sales Tax/VAT";
 
   const subscription = await db.serviceSubscription.findFirst({

@@ -37,7 +37,8 @@ export default function UsersPage() {
     try {
       const res = await fetch("/api/users")
       if (res.ok) {
-        const data = await res.json()
+        const _resData = await res.json()
+          const data = _resData.data || _resData
         setUsers(data)
       } else {
         setError("Failed to fetch users")
@@ -53,7 +54,8 @@ export default function UsersPage() {
     try {
       const res = await fetch("/api/clients")
       if (res.ok) {
-        const data = await res.json()
+        const _resData = await res.json()
+          const data = _resData.data || _resData
         setClients(data)
       }
     } catch (err) {
@@ -75,7 +77,8 @@ export default function UsersPage() {
       })
       
       if (!res.ok) {
-        const data = await res.json()
+        const _resData = await res.json()
+          const data = _resData.data || _resData
         alert(data.error || "Failed to update role")
         return
       }
@@ -95,7 +98,8 @@ export default function UsersPage() {
       })
       
       if (!res.ok) {
-        const data = await res.json()
+        const _resData = await res.json()
+          const data = _resData.data || _resData
         alert(data.error || "Failed to update status")
         return
       }
@@ -116,7 +120,8 @@ export default function UsersPage() {
       })
       
       if (!res.ok) {
-        const data = await res.json()
+        const _resData = await res.json()
+          const data = _resData.data || _resData
         alert(data.error || "Failed to link client")
         return
       }

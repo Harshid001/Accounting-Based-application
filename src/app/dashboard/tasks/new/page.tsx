@@ -63,7 +63,8 @@ export default function NewTaskPage() {
       if (res.ok) {
         router.push('/dashboard/tasks');
       } else {
-        const data = await res.json();
+        const _resData = await res.json()
+          const data = _resData.data || _resData;
         alert(data.error || 'Failed to create task');
       }
     } catch (err) {

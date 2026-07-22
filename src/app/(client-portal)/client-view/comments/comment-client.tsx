@@ -20,7 +20,8 @@ export function CommentClient() {
       // Server determines client scope from session; no clientId param needed
       const res = await fetch(`/api/comments`)
       if (res.ok) {
-        const data = await res.json()
+        const _resData = await res.json()
+          const data = _resData.data || _resData
         setComments(data)
       }
     } catch (err) {

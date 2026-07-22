@@ -14,7 +14,8 @@ export default function DashboardPage() {
       try {
         const res = await fetch('/api/dashboard');
         if (res.ok) {
-          const data = await res.json();
+          const _resData = await res.json()
+          const data = _resData.data || _resData;
           setStats(data);
         }
       } catch (err) {

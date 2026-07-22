@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { ROLES } from "@/lib/permissions"
-import { PrismaClient, ComplianceType, ComplianceStatus } from "@prisma/client"
+import { ComplianceType, ComplianceStatus } from "@prisma/client"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 
@@ -18,6 +18,8 @@ export async function GET(req: Request) {
     const status = searchParams.get("status")
     const startDate = searchParams.get("startDate")
     const endDate = searchParams.get("endDate")
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10))
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "50", 10)))
 
     const { role, id: userId } = session.user
 
@@ -51,17 +53,22 @@ export async function GET(req: Request) {
       }
     }
 
-    const items = await prisma.complianceItem.findMany({
-      where: whereClause,
-      include: {
-        client: {
-          select: { id: true, name: true }
-        }
-      },
-      orderBy: { dueDate: "asc" }
-    })
+    const [items, total] = await Promise.all([
+      prisma.complianceItem.findMany({
+        where: whereClause,
+        include: {
+          client: {
+            select: { id: true, name: true }
+          }
+        },
+        orderBy: { dueDate: "asc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.complianceItem.count({ where: whereClause }),
+    ])
 
-    return NextResponse.json(items)
+    return NextResponse.json({ data: items, pagination: { page, pageSize, total } })
   } catch (error) {
     console.error("Error fetching global compliance items:", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })

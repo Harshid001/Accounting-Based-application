@@ -104,7 +104,7 @@ export function TaskDashboard() {
     try {
       const res = await fetch("/api/tasks")
       if (!res.ok) throw new Error()
-      setTasks(await res.json())
+      const _taskData = await res.json(); setTasks(_taskData.data || _taskData)
     } catch {
       setError("Couldn't load tasks. Try refreshing.")
     } finally {

@@ -14,6 +14,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const parentType = searchParams.get("parentType");
     const parentId = searchParams.get("parentId");
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "50", 10)));
 
     // CLIENT role: only allow fetching comments for their own client entity
     if (session.user.role === "CLIENT") {
@@ -24,12 +26,17 @@ export async function GET(req: NextRequest) {
 
       // If no parentType/parentId, return all comments scoped to their client
       if (!parentType || !parentId) {
-        const comments = await prisma.comment.findMany({
-          where: { clientId: userClientId },
-          include: { User: { select: { id: true, name: true } } },
-          orderBy: { createdAt: "asc" }
-        });
-        return NextResponse.json(comments);
+        const [comments, total] = await Promise.all([
+          prisma.comment.findMany({
+            where: { clientId: userClientId },
+            include: { User: { select: { id: true, name: true } } },
+            orderBy: { createdAt: "asc" },
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+          }),
+          prisma.comment.count({ where: { clientId: userClientId } }),
+        ]);
+        return NextResponse.json({ data: comments, pagination: { page, pageSize, total } });
       }
 
       // Validate they own the entity before returning comments
@@ -71,13 +78,18 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const comments = await prisma.comment.findMany({
-      where,
-      include: { User: { select: { id: true, name: true } } },
-      orderBy: { createdAt: "asc" }
-    });
+    const [comments, total] = await Promise.all([
+      prisma.comment.findMany({
+        where,
+        include: { User: { select: { id: true, name: true } } },
+        orderBy: { createdAt: "asc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.comment.count({ where }),
+    ]);
 
-    return NextResponse.json(comments);
+    return NextResponse.json({ data: comments, pagination: { page, pageSize, total } });
   } catch (error: any) {
     console.error("Failed to list comments:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
@@ -136,17 +148,16 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      // Simple Mention Notifications (hooking into Notification system)
-      for (const mentionedUid of validMentions) {
-         // Create notification for mentioned user
-         await tx.notification.create({
-           data: {
-             recipientId: mentionedUid,
-             type: "GENERAL", // Assuming GENERAL covers mentions
-             channel: "IN_APP"
-             // In a real system, you'd add a link to the entity
-           }
-         });
+      // N+1 FIX: Batch-create mention notifications with createMany
+      // instead of sequential creates in a loop
+      if (validMentions.length > 0) {
+        await tx.notification.createMany({
+          data: validMentions.map(mentionedUid => ({
+            recipientId: mentionedUid,
+            type: "GENERAL" as const,
+            channel: "IN_APP" as const,
+          })),
+        });
       }
 
       return comment;

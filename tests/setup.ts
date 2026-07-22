@@ -31,19 +31,25 @@ vi.mock("next-auth/next", () => ({
 const prisma = new PrismaClient();
 
 export async function clearDatabase() {
-  await prisma.auditLog.deleteMany({});
-  await prisma.notification.deleteMany({});
-  await prisma.comment.deleteMany({});
-  await prisma.paymentIntent.deleteMany({});
-  await prisma.payment.deleteMany({});
-  await prisma.invoiceLineItem.deleteMany({});
-  await prisma.invoice.deleteMany({});
-  await prisma.complianceItem.deleteMany({});
-  await prisma.document.deleteMany({});
-  await prisma.task.deleteMany({});
-  await prisma.serviceSubscription.deleteMany({});
-  await prisma.service.deleteMany({});
-  await prisma.client.deleteMany({});
-  await prisma.user.deleteMany({});
-  await prisma.invoiceCounter.deleteMany({});
+  try {
+    await prisma.$executeRawUnsafe(
+      'TRUNCATE TABLE "AuditLog", "Notification", "Comment", "PaymentIntent", "Payment", "InvoiceLineItem", "Invoice", "ComplianceItem", "Document", "Task", "ServiceSubscription", "Service", "User", "Client", "InvoiceCounter" RESTART IDENTITY CASCADE;'
+    );
+  } catch {
+    await prisma.auditLog.deleteMany({});
+    await prisma.notification.deleteMany({});
+    await prisma.comment.deleteMany({});
+    await prisma.paymentIntent.deleteMany({});
+    await prisma.payment.deleteMany({});
+    await prisma.invoiceLineItem.deleteMany({});
+    await prisma.invoice.deleteMany({});
+    await prisma.complianceItem.deleteMany({});
+    await prisma.document.deleteMany({});
+    await prisma.task.deleteMany({});
+    await prisma.serviceSubscription.deleteMany({});
+    await prisma.service.deleteMany({});
+    await prisma.user.deleteMany({});
+    await prisma.client.deleteMany({});
+    await prisma.invoiceCounter.deleteMany({});
+  }
 }

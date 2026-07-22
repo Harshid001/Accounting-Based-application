@@ -2,12 +2,22 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { appCache } from "@/lib/cache";
+
+const SERVICES_CACHE_KEY = "services:all";
+const SERVICES_CACHE_TTL = 300_000; // 5 minutes
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check cache first
+    const cached = appCache.get(SERVICES_CACHE_KEY);
+    if (cached) {
+      return NextResponse.json(cached);
     }
 
     const services = await prisma.service.findMany({
@@ -18,6 +28,8 @@ export async function GET() {
       },
       orderBy: { name: "asc" }
     });
+
+    appCache.set(SERVICES_CACHE_KEY, services, SERVICES_CACHE_TTL, ["services"]);
 
     return NextResponse.json(services);
   } catch (error) {
@@ -56,6 +68,9 @@ export async function POST(req: Request) {
       data: { name: name.trim() }
     });
 
+    // Invalidate services cache on mutation
+    appCache.invalidateByTag("services");
+
     return NextResponse.json(service, { status: 201 });
   } catch (error) {
     console.error("Error creating service:", error);
@@ -86,6 +101,9 @@ export async function PUT(req: Request) {
       data: { name: name.trim() }
     });
 
+    // Invalidate services cache on mutation
+    appCache.invalidateByTag("services");
+
     return NextResponse.json(updated);
   } catch (error) {
     console.error("Error updating service:", error);
@@ -114,6 +132,9 @@ export async function DELETE(req: Request) {
     await prisma.service.delete({
       where: { id }
     });
+
+    // Invalidate services cache on mutation
+    appCache.invalidateByTag("services");
 
     return NextResponse.json({ message: "Service deleted successfully" });
   } catch (error) {

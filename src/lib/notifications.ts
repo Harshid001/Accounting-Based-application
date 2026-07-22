@@ -1,4 +1,5 @@
 import { Notification, User, ComplianceItem } from "@prisma/client";
+import { sendEmail } from "./email";
 
 /**
  * Delivers a notification via the configured channels (Email, Push, In-App).
@@ -12,15 +13,24 @@ export async function deliverNotification(
   // 1. Email Delivery
   if (recipient.email) {
     try {
-      await sendEmail(recipient.email, notification, contextItem);
+      await sendComplianceEmail(recipient.email, notification, contextItem);
     } catch (err) {
       console.error(`Failed to send email to ${recipient.email}:`, err);
     }
   }
 
-  // 2. Capacitor Push Notification (Mobile)
+  // 2. Capacitor / FCM Push Notification (Mobile)
+  // DEFERRED: Wiring up real push requires adding an `fcmToken` field to the
+  // User model and configuring Firebase Admin SDK credentials — deferred to a
+  // dedicated push-notification sprint to keep this diff focused on
+  // performance + existing integration completion.
+  //
+  // When implemented:
+  //   - Add `fcmToken String?` to User model
+  //   - Install firebase-admin, configure service account
+  //   - Use firebaseAdmin.messaging().send({ token, notification: { ... } })
   try {
-    await sendCapacitorPush(recipient, notification, contextItem);
+    console.log(`[PUSH-STUB] Server-side FCM push for user ${recipient.id} would trigger here.`);
   } catch (err) {
     console.error(`Failed to send Capacitor push to ${recipient.id}:`, err);
   }
@@ -32,22 +42,21 @@ export async function deliverNotification(
   // triggering the OS notification client-side. No server-side "sendElectronNotification" is needed.
 }
 
-async function sendEmail(email: string, notification: Notification, item: ComplianceItem) {
-  // In a real implementation, this would use Resend, SendGrid, or AWS SES.
-  // e.g., await resend.emails.send({ to: email, subject: "Deadline", html: "..." })
-  console.log(`[EMAIL] Sent to ${email}: Compliance Deadline for ${item.type} (Due: ${item.dueDate})`);
-}
+async function sendComplianceEmail(email: string, notification: Notification, item: ComplianceItem) {
+  const subject = `AFMS — Compliance Deadline: ${item.type}`;
+  const html = `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #1a1a2e;">Compliance Deadline Approaching</h2>
+      <p>A <strong>${item.type}</strong> compliance item is due on
+         <strong>${item.dueDate.toLocaleDateString()}</strong>.</p>
+      <p>Current status: <strong>${item.status}</strong></p>
+      ${item.notes ? `<p>Notes: ${item.notes}</p>` : ""}
+      <hr style="border: none; border-top: 1px solid #eee;" />
+      <p style="color: #666; font-size: 12px;">
+        This is an automated notification from AFMS. Please log in to take action.
+      </p>
+    </div>
+  `;
 
-async function sendCapacitorPush(user: User, notification: Notification, item: ComplianceItem) {
-  // Architecture Fix: A cron route cannot call Capacitor client APIs.
-  // This requires device token registration (e.g., adding `fcmToken` to the User model)
-  // and using a server-side Push SDK (like Firebase Admin SDK) to send the payload.
-  
-  // if (!user.fcmToken) return;
-  // await firebaseAdmin.messaging().send({
-  //   token: user.fcmToken,
-  //   notification: { title: "Deadline Approaching", body: `Compliance ${item.type} is due soon.` }
-  // });
-  
-  console.log(`[PUSH] Stub: Server-side FCM push for user ${user.id} would trigger here.`);
+  await sendEmail({ to: email, subject, html });
 }

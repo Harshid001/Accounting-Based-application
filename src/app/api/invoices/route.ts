@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     if (userRole !== "ADMIN") {
       const client = await prisma.client.findUnique({
         where: { id: clientId },
-        include: { assignedTo: true }
+        include: { assignedTo: { select: { id: true } } }
       });
       if (!client || !client.assignedTo.some(u => u.id === userId)) {
         return NextResponse.json({ error: "Unauthorized for this client" }, { status: 403 });
@@ -89,82 +89,93 @@ export async function POST(req: NextRequest) {
     const total = subtotal + taxTotal;
     const year = new Date().getFullYear().toString();
 
-    // 2. Wrap everything in a transaction, except the invoice number which we generate just prior safely 
-    // Since generateInvoiceNumber is atomic, we get a guaranteed unique sequence number.
-    // If the creation transaction fails, there WILL be a gap. 
-    // To strictly avoid gaps, we must do the counter increment inside the main transaction.
-    
-    // Let's implement the strictly gapless version using $transaction with a retry loop
-    const maxRetries = 3;
-    let result;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        result = await prisma.$transaction(async (tx) => {
-          // a. Atomic upsert to get the sequence inside the transaction
-          // This holds a row-level lock on the counter until transaction ends
-          const counter = await tx.invoiceCounter.upsert({
-            where: { id: year },
-            create: { id: year, seq: 1 },
-            update: { seq: { increment: 1 } },
-          });
-          
-          const invoiceNumber = `INV-${year}-${String(counter.seq).padStart(4, "0")}`;
+    // 2. Fast atomic sequence allocation outside long transaction
+    const counter = await prisma.invoiceCounter.upsert({
+      where: { id: year },
+      create: { id: year, seq: 1 },
+      update: { seq: { increment: 1 } },
+    });
+    const invoiceNumber = `INV-${year}-${String(counter.seq).padStart(4, "0")}`;
 
-          // b. Create the invoice
-          const invoice = await tx.invoice.create({
-            data: {
-              invoiceNumber,
-              clientId,
-              serviceSubscriptionId,
-              dueDate: new Date(dueDate),
-              subtotal: new Prisma.Decimal(subtotal),
-              taxTotal: new Prisma.Decimal(taxTotal),
-              total: new Prisma.Decimal(total),
-              notes,
-              lineItems: {
-                create: processedLineItems
-              }
-            },
-            include: {
-              lineItems: true
+    // 3. Create the real invoice
+    try {
+      const invoice = await prisma.$transaction(async (tx) => {
+        const createdInvoice = await tx.invoice.create({
+          data: {
+            invoiceNumber,
+            clientId,
+            serviceSubscriptionId,
+            dueDate: new Date(dueDate),
+            subtotal: new Prisma.Decimal(subtotal),
+            taxTotal: new Prisma.Decimal(taxTotal),
+            total: new Prisma.Decimal(total),
+            notes,
+            lineItems: {
+              create: processedLineItems
             }
-          });
-
-          // c. Audit Log
-          await tx.auditLog.create({
-            data: {
-              entityType: "Invoice",
-              entityId: invoice.id,
-              action: "CREATE",
-              userId: "system", // TODO: from session
-              diff: JSON.parse(JSON.stringify(invoice))
-            }
-          });
-
-          return invoice;
+          },
+          include: {
+            lineItems: true
+          }
         });
-        
-        // Break out of retry loop on success
-        break;
-      } catch (error: any) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002" && attempt < maxRetries) {
-          // Wait briefly before retrying the transaction to handle the year-boundary race
-          await new Promise(res => setTimeout(res, 50 * attempt));
-          continue;
-        }
-        throw error;
+
+        await tx.auditLog.create({
+          data: {
+            entityType: "Invoice",
+            entityId: createdInvoice.id,
+            action: "CREATE",
+            userId: userId,
+            diff: JSON.parse(JSON.stringify(createdInvoice))
+          }
+        });
+
+        return createdInvoice;
+      });
+
+      return NextResponse.json(invoice, { status: 201 });
+    } catch (creationError: any) {
+      console.error(`[InvoiceCreationError] Failed to create invoice ${invoiceNumber}, attempting VOID stub fallback:`, creationError);
+      
+      // Step 3 Fallback: Create VOID stub to preserve gapless GST sequence requirement
+      try {
+        const voidStub = await prisma.invoice.create({
+          data: {
+            invoiceNumber,
+            clientId,
+            dueDate: new Date(dueDate),
+            subtotal: new Prisma.Decimal(0),
+            taxTotal: new Prisma.Decimal(0),
+            total: new Prisma.Decimal(0),
+            status: "VOID",
+            notes: `SYSTEM_VOID: Invoice creation aborted after sequence allocation. Error: ${creationError.message || "Unknown error"}`
+          }
+        });
+
+        await prisma.auditLog.create({
+          data: {
+            entityType: "Invoice",
+            entityId: voidStub.id,
+            action: "CREATE",
+            userId: userId,
+            diff: JSON.parse(JSON.stringify({ status: "VOID", reason: "SYSTEM_VOID_FALLBACK", originalError: creationError.message }))
+          }
+        });
+
+        return NextResponse.json(
+          { error: "Invoice creation failed. A VOID stub record was created to preserve GST sequence integrity.", invoiceNumber },
+          { status: 500 }
+        );
+      } catch (voidStubError: any) {
+        // Double-failure log for manual reconciliation
+        console.error(
+          `[CRITICAL_COMPLIANCE_GAP] Failed to insert VOID stub for sequence ${invoiceNumber}. Manual reconciliation required!`,
+          voidStubError
+        );
+        return NextResponse.json({ error: "Critical creation failure. Contact administrator." }, { status: 500 });
       }
     }
-
-    return NextResponse.json(result, { status: 201 });
   } catch (error: any) {
-    console.error("Failed to create invoice:", error);
-    
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-       return NextResponse.json({ error: "Concurrent creation error, please try again" }, { status: 409 });
-    }
-    
+    console.error("Failed to process POST /api/invoices:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
@@ -179,6 +190,8 @@ export async function GET(req: NextRequest) {
     const { role, id: userId } = session.user;
     const { searchParams } = new URL(req.url);
     const requestedClientId = searchParams.get("clientId");
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "50", 10)));
 
     let whereClause: any = {};
 
@@ -213,15 +226,32 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const invoices = await prisma.invoice.findMany({
-      where: whereClause,
-      include: {
-        client: { select: { name: true } }
-      },
-      orderBy: { createdAt: "desc" }
-    });
+    const [invoices, total] = await Promise.all([
+      prisma.invoice.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          invoiceNumber: true,
+          clientId: true,
+          serviceSubscriptionId: true,
+          issueDate: true,
+          dueDate: true,
+          subtotal: true,
+          taxTotal: true,
+          total: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          client: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.invoice.count({ where: whereClause }),
+    ]);
 
-    return NextResponse.json(invoices);
+    return NextResponse.json({ data: invoices, pagination: { page, pageSize, total } });
   } catch (error) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }

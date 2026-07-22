@@ -29,6 +29,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const clientId = searchParams.get('clientId');
     const status = searchParams.get('status');
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "50", 10)));
 
     let whereClause: any = { AND: [] };
     const scope = taskScopeWhere(session.user);
@@ -43,20 +45,25 @@ export async function GET(request: Request) {
       whereClause.AND.push({ status });
     }
 
-    const tasks = await prisma.task.findMany({
-      where: whereClause,
-      include: {
-        assignedTo: { select: { id: true, name: true, email: true } },
-        client: { select: { id: true, name: true } },
-        complianceItem: { select: { id: true, type: true } },
-      },
-      orderBy: [
-        { dueDate: 'asc' },
-        { createdAt: 'desc' },
-      ],
-    });
+    const [tasks, total] = await Promise.all([
+      prisma.task.findMany({
+        where: whereClause,
+        include: {
+          assignedTo: { select: { id: true, name: true, email: true } },
+          client: { select: { id: true, name: true } },
+          complianceItem: { select: { id: true, type: true } },
+        },
+        orderBy: [
+          { dueDate: 'asc' },
+          { createdAt: 'desc' },
+        ],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.task.count({ where: whereClause }),
+    ]);
 
-    return NextResponse.json(tasks);
+    return NextResponse.json({ data: tasks, pagination: { page, pageSize, total } });
   } catch (error) {
     console.error('Error fetching tasks:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

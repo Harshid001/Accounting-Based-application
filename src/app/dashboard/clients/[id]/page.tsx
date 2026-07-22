@@ -38,7 +38,8 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
     try {
       const res = await fetch(`/api/tasks?clientId=${resolvedParams.id}`)
       if (res.ok) {
-        const data = await res.json()
+        const _resData = await res.json()
+          const data = _resData.data || _resData
         setTasks(data)
       }
     } catch (err) {
@@ -50,7 +51,8 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
     try {
       const res = await fetch(`/api/clients/${resolvedParams.id}`)
       if (!res.ok) throw new Error("Failed to load client details")
-      const data = await res.json()
+      const _resData = await res.json()
+          const data = _resData.data || _resData
       setClient(data)
     } catch (err: any) {
       setError(err.message)
@@ -63,7 +65,8 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
     try {
       const res = await fetch(`/api/clients/${resolvedParams.id}/documents`)
       if (res.ok) {
-        const data = await res.json()
+        const _resData = await res.json()
+          const data = _resData.data || _resData
         setDocuments(data)
       }
     } catch (err) {
@@ -75,7 +78,8 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
     try {
       const res = await fetch(`/api/clients/${resolvedParams.id}/compliance-items`)
       if (res.ok) {
-        const data = await res.json()
+        const _resData = await res.json()
+          const data = _resData.data || _resData
         setComplianceItems(data)
       }
     } catch (err) {

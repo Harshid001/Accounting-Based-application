@@ -80,13 +80,13 @@ export async function POST(
         });
       }
 
-      // 7. Audit Log
+      // 7. Audit Log — use actual session user
       await tx.auditLog.create({
         data: {
           entityType: "Payment",
           entityId: payment.id,
           action: "CREATE",
-          userId: "system", // TODO
+          userId: session.user.id,
           diff: JSON.parse(JSON.stringify({ payment, invoiceStatusChange: newStatus }))
         }
       });

@@ -91,7 +91,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const fileKey = `${uniqueId}-${cleanName}`
 
     // 3. Write metadata to database in transaction
-    const { document, uploadUrl } = await prisma.$transaction(async (tx) => {
+    const document = await prisma.$transaction(async (tx) => {
       const doc = await tx.document.create({
         data: {
           clientId,
@@ -102,9 +102,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           uploadedById: session.user.id,
         }
       })
-
-      // Generate Pre-signed PUT URL
-      const url = await getUploadUrl(fileKey, fileType)
 
       // Write to AuditLog
       await tx.auditLog.create({
@@ -117,8 +114,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
       })
 
-      return { document: doc, uploadUrl: url }
+      return doc
     });
+
+    // Generate Pre-signed PUT URL OUTSIDE the transaction to avoid
+    // holding a DB connection open during the S3 network call
+    const uploadUrl = await getUploadUrl(fileKey, fileType)
 
     return NextResponse.json({ document, uploadUrl })
   } catch (error: any) {

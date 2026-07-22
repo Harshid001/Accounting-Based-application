@@ -164,21 +164,54 @@ describe("Billing & Invoicing API", () => {
     });
   });
 
-  it("should handle concurrent invoice numbering", async () => {
+  it("should handle 10 concurrent invoice creations without transaction timeout and with unique numbers", async () => {
     setMockSession({ user: { id: assignedStaff.id, role: "ADMIN" } });
-    const req1 = { json: async () => getPayload(client.id), headers: new Headers({}) } as any;
-    const req2 = { json: async () => getPayload(client.id), headers: new Headers({}) } as any;
+    const reqs = Array.from({ length: 10 }, () => ({
+      json: async () => getPayload(client.id),
+      headers: new Headers({})
+    } as any));
+
+    const responses = await Promise.all(reqs.map(req => createInvoice(req)));
+    for (const res of responses) {
+      expect(res.status).toBe(201);
+    }
+
+    const invoices = await Promise.all(responses.map(r => r.json()));
+    const numbers = invoices.map(i => i.invoiceNumber);
+
+    expect(numbers.length).toBe(10);
+    const uniqueNumbers = new Set(numbers);
+    expect(uniqueNumbers.size).toBe(10);
+  }, 15000);
+
+  it("should generate a VOID stub record if invoice creation fails after sequence allocation", async () => {
+    setMockSession({ user: { id: assignedStaff.id, role: "ADMIN" } });
     
-    const [res1, res2] = await Promise.all([createInvoice(req1), createInvoice(req2)]);
-    
-    expect(res1.status).toBe(201);
-    expect(res2.status).toBe(201);
-    
-    const inv1 = await res1.json();
-    const inv2 = await res2.json();
-    
-    expect(inv1.invoiceNumber).toBeTruthy();
-    expect(inv2.invoiceNumber).toBeTruthy();
-    expect(inv1.invoiceNumber).not.toBe(inv2.invoiceNumber);
+    // Pass payload with non-existent serviceSubscriptionId to force FK creation failure during transaction
+    const badPayload = {
+      ...getPayload(client.id),
+      serviceSubscriptionId: "invalid-non-existent-sub-id"
+    };
+
+    const req = {
+      json: async () => badPayload,
+      headers: new Headers({})
+    } as any;
+
+    const res = await createInvoice(req);
+    expect(res.status).toBe(500);
+
+    const body = await res.json();
+    expect(body.invoiceNumber).toBeTruthy();
+    expect(body.error).toContain("VOID stub");
+
+    // Verify VOID stub exists in DB
+    const stub = await prisma.invoice.findUnique({
+      where: { invoiceNumber: body.invoiceNumber }
+    });
+
+    expect(stub).toBeDefined();
+    expect(stub!.status).toBe("VOID");
+    expect(stub!.notes).toContain("SYSTEM_VOID");
   });
 });

@@ -70,10 +70,21 @@ export async function POST(req: Request) {
         }
       });
 
-      // Simulate sending verification email
+      // Send verification email (falls back to console.log when RESEND_API_KEY is not set)
+      const { sendEmail } = await import("@/lib/email");
       const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify-email?token=${token}`;
-      console.log(`[Email Mock] Send to ${email}: Verify your email here ${verifyUrl}`);
-      // await sendEmail(email, "Verify your email", `Click here: ${verifyUrl}`);
+      await sendEmail({
+        to: email,
+        subject: "AFMS — Verify your email address",
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #1a1a2e;">Welcome to AFMS</h2>
+            <p>Please verify your email address by clicking the link below:</p>
+            <p><a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #1a1a2e; color: #fff; text-decoration: none; border-radius: 6px;">Verify Email</a></p>
+            <p style="color: #666; font-size: 12px;">This link expires in 24 hours. If you didn't register, you can ignore this email.</p>
+          </div>
+        `,
+      });
 
       return NextResponse.json({ success: true, message: "Registration successful. Please check your email to verify your account." });
     } catch (error) {

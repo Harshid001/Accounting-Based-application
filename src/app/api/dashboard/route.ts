@@ -5,6 +5,9 @@ import { authOptions } from "@/lib/auth";
 import { ROLES, isStaffLeadership } from "@/lib/permissions";
 
 import { prisma } from "@/lib/prisma";
+import { appCache } from "@/lib/cache";
+
+const DASHBOARD_CACHE_TTL = 60_000; // 60 seconds
 
 function taskScopeWhere(user: any) {
   if (user.role === ROLES.ADMIN) return {};
@@ -35,6 +38,13 @@ export async function GET(request: Request) {
     const user = session.user;
     const isFullView = isStaffLeadership(user.role as any);
 
+    // Check cache — key includes userId + role to prevent data leakage
+    const cacheKey = `dashboard:${user.id}:${user.role}`;
+    const cached = appCache.get(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
     const tScope = taskScopeWhere(user);
     const cScope = clientScopeWhere(user);
 
@@ -60,10 +70,9 @@ export async function GET(request: Request) {
 
     if (!isFullView) {
       // Lighter view for Accountant / Data Entry
-      return NextResponse.json({
-        pendingTasks,
-        upcomingDeadlines,
-      });
+      const result = { pendingTasks, upcomingDeadlines };
+      appCache.set(cacheKey, result, DASHBOARD_CACHE_TTL, ["dashboard"]);
+      return NextResponse.json(result);
     }
 
     // Additional metrics for ADMIN / MANAGER
@@ -149,14 +158,18 @@ export async function GET(request: Request) {
     // Sort by task count descending
     employeeWorkload.sort((a, b) => b.count - a.count);
 
-    return NextResponse.json({
+    const result = {
       totalClients,
       pendingTasks,
       pendingDocuments,
       upcomingDeadlines,
       completedFilings,
       employeeWorkload,
-    });
+    };
+
+    appCache.set(cacheKey, result, DASHBOARD_CACHE_TTL, ["dashboard"]);
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

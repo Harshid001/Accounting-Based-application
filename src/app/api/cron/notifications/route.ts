@@ -29,55 +29,112 @@ export async function GET(request: Request) {
       }
     });
 
+    if (upcomingItems.length === 0) {
+      return NextResponse.json({ success: true, processed: 0 });
+    }
+
+    // N+1 FIX: Batch-fetch ALL existing notifications for these compliance items
+    // instead of checking one-by-one inside the loop.
+    const complianceItemIds = upcomingItems.map(item => item.id);
+    const existingNotifications = await prisma.notification.findMany({
+      where: {
+        relatedComplianceItemId: { in: complianceItemIds },
+        type: "COMPLIANCE_DEADLINE",
+      },
+      select: {
+        recipientId: true,
+        relatedComplianceItemId: true,
+        triggerOffset: true,
+      },
+    });
+
+    // Build a lookup set for O(1) dedup: "recipientId:complianceItemId:offset"
+    const existingSet = new Set(
+      existingNotifications.map(
+        n => `${n.recipientId}:${n.relatedComplianceItemId}:${n.triggerOffset}`
+      )
+    );
+
     let count = 0;
     const OFFSETS = [7, 3, 1];
     const msInDay = 24 * 60 * 60 * 1000;
-    
+
+    // Collect all notifications to create in one batch
+    const toCreate: Array<{
+      recipientId: string;
+      relatedComplianceItemId: string;
+      triggerOffset: number;
+      // Keep references for delivery
+      _recipientRef: typeof upcomingItems[0]["client"]["assignedTo"][0];
+      _itemRef: typeof upcomingItems[0];
+    }> = [];
+
     for (const item of upcomingItems) {
-      // Calculate how many days left until due date
       const daysLeft = Math.ceil((item.dueDate.getTime() - Date.now()) / msInDay);
-      
-      // Determine which offset applies (exact match, or falling within the window)
-      // e.g., if daysLeft is 6, we've missed the 7-day exact mark, but we should trigger the 7-day notification if we haven't already.
       const currentOffset = OFFSETS.find(o => daysLeft <= o);
-      
       if (!currentOffset) continue;
 
-      // Find stakeholders: assigned staff + client users
       const recipients = [...item.client.assignedTo, ...item.client.clientUsers];
-      
+
       for (const recipient of recipients) {
-        // Unique constraint dedup check based on triggerOffset
-        const existing = await prisma.notification.findFirst({
-          where: {
+        const key = `${recipient.id}:${item.id}:${currentOffset}`;
+        if (!existingSet.has(key)) {
+          toCreate.push({
             recipientId: recipient.id,
             relatedComplianceItemId: item.id,
-            type: "COMPLIANCE_DEADLINE",
-            triggerOffset: currentOffset
-          }
-        });
-
-        if (!existing) {
-          // Send notification (Email + App Push)
-          const notification = await prisma.notification.create({
-            data: {
-              recipientId: recipient.id,
-              type: "COMPLIANCE_DEADLINE",
-              relatedComplianceItemId: item.id,
-              channel: "EMAIL",
-              triggerOffset: currentOffset
-            }
+            triggerOffset: currentOffset,
+            _recipientRef: recipient,
+            _itemRef: item,
           });
+          // Add to set so we don't create duplicates within this batch
+          existingSet.add(key);
+        }
+      }
+    }
 
-          await deliverNotification(notification, recipient, item);
-          
-          await prisma.notification.update({
-            where: { id: notification.id },
-            data: { sentAt: new Date() }
-          });
-          
+    // Batch-create all new notifications
+    if (toCreate.length > 0) {
+      await prisma.notification.createMany({
+        data: toCreate.map(n => ({
+          recipientId: n.recipientId,
+          type: "COMPLIANCE_DEADLINE" as const,
+          relatedComplianceItemId: n.relatedComplianceItemId,
+          channel: "EMAIL" as const,
+          triggerOffset: n.triggerOffset,
+        })),
+        skipDuplicates: true, // Safety net for @@unique constraint race
+      });
+
+      // Fetch the created notifications back to get IDs for delivery + sentAt update
+      const createdNotifications = await prisma.notification.findMany({
+        where: {
+          relatedComplianceItemId: { in: complianceItemIds },
+          type: "COMPLIANCE_DEADLINE",
+          sentAt: null, // Only unsent ones
+        },
+      });
+
+      // Deliver each notification (email/push) and mark as sent
+      const sentIds: string[] = [];
+      for (const notification of createdNotifications) {
+        const ref = toCreate.find(
+          t => t.recipientId === notification.recipientId &&
+               t.relatedComplianceItemId === notification.relatedComplianceItemId &&
+               t.triggerOffset === notification.triggerOffset
+        );
+        if (ref) {
+          await deliverNotification(notification, ref._recipientRef, ref._itemRef);
+          sentIds.push(notification.id);
           count++;
         }
+      }
+
+      // Batch-update sentAt
+      if (sentIds.length > 0) {
+        await prisma.notification.updateMany({
+          where: { id: { in: sentIds } },
+          data: { sentAt: new Date() },
+        });
       }
     }
 

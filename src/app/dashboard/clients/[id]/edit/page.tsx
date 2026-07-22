@@ -68,7 +68,8 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
       })
 
       if (!res.ok) {
-        const data = await res.json()
+        const _resData = await res.json()
+          const data = _resData.data || _resData
         throw new Error(data.error || "Failed to update client")
       }
 

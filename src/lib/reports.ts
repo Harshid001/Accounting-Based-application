@@ -1,5 +1,8 @@
 import { prisma } from "./prisma";
 import { Prisma } from "@prisma/client";
+import { appCache } from "./cache";
+
+const REPORT_CACHE_TTL = 120_000; // 2 minutes
 
 export async function validateReportParams(userId: string, role: string, startDate?: string, endDate?: string, clientId?: string) {
   // 1. Validate dates
@@ -53,6 +56,11 @@ export async function validateReportParams(userId: string, role: string, startDa
 }
 
 export async function getRevenueReportData(userId: string, role: string, startDate?: string, endDate?: string, clientId?: string) {
+  // Check cache first — key includes all scoping params
+  const cacheKey = `report:revenue:${userId}:${role}:${startDate || ""}:${endDate || ""}:${clientId || ""}`;
+  const cached = appCache.get<any>(cacheKey);
+  if (cached) return cached;
+
   const { start, end, clientIdsFilter } = await validateReportParams(userId, role, startDate, endDate, clientId);
 
   // Get Invoice totals
@@ -61,13 +69,7 @@ export async function getRevenueReportData(userId: string, role: string, startDa
     ...(clientIdsFilter ? { clientId: { in: clientIdsFilter } } : {})
   };
 
-  const invoiceAgg = await prisma.invoice.aggregate({
-    _sum: { total: true },
-    where: invoiceWhere
-  });
-  
-  // Exclude VOID invoices from total billed?
-  // Wait, the aggregate above includes VOID. Let's exclude VOID.
+  // Exclude VOID invoices from total billed
   const activeInvoiceWhere: Prisma.InvoiceWhereInput = {
     ...invoiceWhere,
     status: { not: "VOID" }
@@ -98,22 +100,7 @@ export async function getRevenueReportData(userId: string, role: string, startDa
   // Actually, standard outstanding balance is just billed - collected in the period.
   const outstandingBalance = totalBilled.minus(totalCollected);
 
-  // Get totals by client for breakdown
-  const invoicesByClient = await prisma.invoice.groupBy({
-    by: ['clientId'],
-    _sum: { total: true },
-    where: activeInvoiceWhere
-  });
-
-  const paymentsByClient = await prisma.payment.groupBy({
-    by: ['invoiceId'],
-    _sum: { amount: true },
-    where: paymentWhere
-  });
-  
-  // We can fetch client names if needed, but for the API, returning just the raw Decimal strings is fine.
-  
-  return {
+  const result = {
     period: { start, end },
     metrics: {
       totalBilled: totalBilled.toString(),
@@ -121,9 +108,18 @@ export async function getRevenueReportData(userId: string, role: string, startDa
       outstandingBalance: outstandingBalance.toString()
     }
   };
+
+  appCache.set(cacheKey, result, REPORT_CACHE_TTL, ["reports", "reports:revenue"]);
+
+  return result;
 }
 
 export async function getComplianceReportData(userId: string, role: string, startDate?: string, endDate?: string, clientId?: string) {
+  // Check cache first
+  const cacheKey = `report:compliance:${userId}:${role}:${startDate || ""}:${endDate || ""}:${clientId || ""}`;
+  const cached = appCache.get<any>(cacheKey);
+  if (cached) return cached;
+
   const { start, end, clientIdsFilter } = await validateReportParams(userId, role, startDate, endDate, clientId);
 
   const whereClause: Prisma.ComplianceItemWhereInput = {
@@ -154,7 +150,7 @@ export async function getComplianceReportData(userId: string, role: string, star
     }
   });
 
-  return {
+  const result = {
     period: { start, end },
     metrics: {
       statusBreakdown: statusCounts,
@@ -162,4 +158,8 @@ export async function getComplianceReportData(userId: string, role: string, star
       overdueCount
     }
   };
+
+  appCache.set(cacheKey, result, REPORT_CACHE_TTL, ["reports", "reports:compliance"]);
+
+  return result;
 }

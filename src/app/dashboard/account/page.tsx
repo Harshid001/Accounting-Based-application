@@ -62,7 +62,8 @@ export default function AccountPage() {
       formData.append("file", file);
       const res = await fetch("/api/users/me/avatar", { method: "POST", body: formData });
       if (!res.ok) throw new Error();
-      const data = await res.json();
+      const _resData = await res.json()
+          const data = _resData.data || _resData;
       setAvatarUrl(data.image);
       await update?.({ image: data.image });
       setMessage({ type: "success", text: "Photo updated." });

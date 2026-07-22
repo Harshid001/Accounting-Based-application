@@ -14,6 +14,9 @@ export async function GET(req: Request) {
     }
 
     const { role, id: userId } = session.user
+    const { searchParams } = new URL(req.url)
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10))
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "50", 10)))
 
     let whereClause = {}
     
@@ -28,20 +31,32 @@ export async function GET(req: Request) {
       }
     }
 
-    const clients = await prisma.client.findMany({
-      where: whereClause,
-      include: {
-        assignedTo: {
-          select: { id: true, name: true, email: true, role: true }
+    const [clients, total] = await Promise.all([
+      prisma.client.findMany({
+        where: whereClause,
+        include: {
+          assignedTo: {
+            select: { id: true, name: true, email: true, role: true }
+          },
+          services: {
+            include: { service: { select: { id: true, name: true } } }
+          },
+          _count: {
+            select: {
+              complianceItems: true,
+              tasks: true,
+              documents: true,
+            }
+          }
         },
-        services: {
-          include: { service: true }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    })
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.client.count({ where: whereClause }),
+    ])
 
-    return NextResponse.json(clients)
+    return NextResponse.json({ data: clients, pagination: { page, pageSize, total } })
   } catch (error) {
     console.error("Error fetching clients:", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })

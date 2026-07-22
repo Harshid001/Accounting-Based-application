@@ -26,6 +26,8 @@ model User {
   tasks           Task[]
   client          Client?        @relation("ClientUsers", fields: [clientId], references: [id], onDelete: Cascade)
   assignedClients Client[]       @relation("ClientAssignment")
+
+  @@index([clientId])
 }
 
 model Client {
@@ -83,6 +85,7 @@ model ComplianceItem {
   tasks        Task[]
 
   @@index([dueDate, status])
+  @@index([clientId])
 }
 
 model Document {
@@ -98,6 +101,8 @@ model Document {
   uploadedById     String
   Comment          Comment[]
   client           Client       @relation(fields: [clientId], references: [id])
+
+  @@index([clientId, archived])
 }
 
 model AuditLog {
@@ -110,6 +115,9 @@ model AuditLog {
   ipAddress  String?
   diff       Json?
   createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
 }
 
 model Task {
@@ -127,6 +135,11 @@ model Task {
   assignedTo       User?           @relation(fields: [assignedToId], references: [id])
   client           Client?         @relation(fields: [clientId], references: [id], onDelete: Restrict)
   complianceItem   ComplianceItem? @relation(fields: [complianceItemId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([assignedToId, status])
 }
 
 model Notification {
@@ -143,6 +156,8 @@ model Notification {
   complianceItem          ComplianceItem?     @relation(fields: [relatedComplianceItemId], references: [id])
 
   @@unique([recipientId, relatedComplianceItemId, type, triggerOffset])
+  @@index([recipientId])
+  @@index([recipientId, readAt])
 }
 
 model InvoiceCounter {
@@ -173,6 +188,7 @@ model Invoice {
 
   @@index([issueDate])
   @@index([status])
+  @@index([clientId])
 }
 
 model InvoiceLineItem {

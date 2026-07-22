@@ -36,13 +36,15 @@ export async function GET(
       return NextResponse.json(invoice);
     }
 
-    // CLIENT: only their own client's invoices
+    // CLIENT: only their own client's invoices — strip internal staff data
     if (role === "CLIENT") {
       const userClientId = (session.user as any).clientId;
       if (!userClientId || invoice.clientId !== userClientId) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
-      return NextResponse.json(invoice);
+      // Remove assignedTo from client — clients don't need to see staff assignments
+      const { assignedTo, ...clientData } = invoice.client;
+      return NextResponse.json({ ...invoice, client: clientData });
     }
 
     // MANAGER / ACCOUNTANT / DATA_ENTRY: must be assigned to this invoice's client

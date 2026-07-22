@@ -88,7 +88,7 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
     setMockSession({ user: { id: clientAUser.id, role: "CLIENT", clientId: clientA.id } });
     const res = await listInvoices({ url: "http://localhost/api/invoices" } as any);
     expect(res.status).toBe(200);
-    const invoices = await res.json();
+    const { data: invoices } = await res.json();
     const ids = invoices.map((i: any) => i.id);
     expect(ids).toContain(invoiceA.id);
     expect(ids).not.toContain(invoiceB.id);
@@ -126,7 +126,7 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
     setMockSession({ user: { id: accountantA.id, role: "ACCOUNTANT" } });
     const res = await listInvoices({ url: "http://localhost/api/invoices" } as any);
     expect(res.status).toBe(200);
-    const invoices = await res.json();
+    const { data: invoices } = await res.json();
     const ids = invoices.map((i: any) => i.id);
     expect(ids).toContain(invoiceA.id);
     expect(ids).not.toContain(invoiceB.id);
@@ -170,7 +170,7 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
     setMockSession({ user: { id: adminUser.id, role: "ADMIN" } });
     const res = await listInvoices({ url: "http://localhost/api/invoices" } as any);
     expect(res.status).toBe(200);
-    const invoices = await res.json();
+    const { data: invoices } = await res.json();
     const ids = invoices.map((i: any) => i.id);
     expect(ids).toContain(invoiceA.id);
     expect(ids).toContain(invoiceB.id);
