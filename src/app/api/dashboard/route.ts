@@ -40,7 +40,7 @@ export async function GET(request: Request) {
 
     // Check cache — key includes userId + role to prevent data leakage
     const cacheKey = `dashboard:${user.id}:${user.role}`;
-    const cached = appCache.get(cacheKey);
+    const cached = await appCache.get(cacheKey);
     if (cached) {
       return NextResponse.json(cached);
     }
@@ -71,7 +71,7 @@ export async function GET(request: Request) {
     if (!isFullView) {
       // Lighter view for Accountant / Data Entry
       const result = { pendingTasks, upcomingDeadlines };
-      appCache.set(cacheKey, result, DASHBOARD_CACHE_TTL, ["dashboard"]);
+      await appCache.set(cacheKey, result, DASHBOARD_CACHE_TTL, ["dashboard"]);
       return NextResponse.json(result);
     }
 
@@ -167,7 +167,7 @@ export async function GET(request: Request) {
       employeeWorkload,
     };
 
-    appCache.set(cacheKey, result, DASHBOARD_CACHE_TTL, ["dashboard"]);
+    await appCache.set(cacheKey, result, DASHBOARD_CACHE_TTL, ["dashboard"]);
 
     return NextResponse.json(result);
   } catch (error) {

@@ -15,7 +15,7 @@ export async function GET() {
     }
 
     // Check cache first
-    const cached = appCache.get(SERVICES_CACHE_KEY);
+    const cached = await appCache.get(SERVICES_CACHE_KEY);
     if (cached) {
       return NextResponse.json(cached);
     }
@@ -29,7 +29,7 @@ export async function GET() {
       orderBy: { name: "asc" }
     });
 
-    appCache.set(SERVICES_CACHE_KEY, services, SERVICES_CACHE_TTL, ["services"]);
+    await appCache.set(SERVICES_CACHE_KEY, services, SERVICES_CACHE_TTL, ["services"]);
 
     return NextResponse.json(services);
   } catch (error) {
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     });
 
     // Invalidate services cache on mutation
-    appCache.invalidateByTag("services");
+    await appCache.invalidateByTag("services");
 
     return NextResponse.json(service, { status: 201 });
   } catch (error) {
@@ -102,7 +102,7 @@ export async function PUT(req: Request) {
     });
 
     // Invalidate services cache on mutation
-    appCache.invalidateByTag("services");
+    await appCache.invalidateByTag("services");
 
     return NextResponse.json(updated);
   } catch (error) {
@@ -134,7 +134,7 @@ export async function DELETE(req: Request) {
     });
 
     // Invalidate services cache on mutation
-    appCache.invalidateByTag("services");
+    await appCache.invalidateByTag("services");
 
     return NextResponse.json({ message: "Service deleted successfully" });
   } catch (error) {
