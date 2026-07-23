@@ -63,3 +63,5 @@ gitleaks_report.txt
 # mobile workspace
 /mobile/node_modules/
 /mobile/dist/
+/mobile/android/app/build/
+/mobile/ios/build/

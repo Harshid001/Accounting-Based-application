@@ -1,14 +1,15 @@
-import { NextResponse } from 'next/server';
-
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
-import { ROLES } from "@/lib/permissions";
-
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { ROLES } from "@/lib/permissions";
+import { withAuth, validateBody } from "@/lib/api/withAuth";
+import { createTaskSchema, taskFiltersSchema } from "@/lib/api/validators";
 
-function taskScopeWhere(user: any) {
-  if (user.role === ROLES.ADMIN) return null;
-  if (user.role === ROLES.MANAGER) {
+type Role = typeof ROLES[keyof typeof ROLES];
+
+function taskScopeWhere(user: { id: string; role: string }) {
+  const userRole = user.role as Role;
+  if (userRole === ROLES.ADMIN) return null;
+  if (userRole === ROLES.MANAGER) {
     return {
       OR: [
         { assignedToId: user.id },
@@ -19,103 +20,82 @@ function taskScopeWhere(user: any) {
   return { assignedToId: user.id };
 }
 
-export async function GET(request: Request) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export const GET = withAuth(async (req: NextRequest, { user, prisma }) => {
+  const { searchParams } = new URL(req.url);
+  const filters = taskFiltersSchema.parse({
+    page: searchParams.get("page"),
+    pageSize: searchParams.get("pageSize"),
+    clientId: searchParams.get("clientId"),
+    status: searchParams.get("status"),
+  });
 
-    const { searchParams } = new URL(request.url);
-    const clientId = searchParams.get('clientId');
-    const status = searchParams.get('status');
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "50", 10)));
+  const userRole = user.role as Role;
+  const scope = taskScopeWhere(user);
 
-    let whereClause: any = { AND: [] };
-    const scope = taskScopeWhere(session.user);
-    if (scope) {
-      whereClause.AND.push(scope);
-    }
+  const whereClause: Record<string, any> = { AND: [] };
+  if (scope) whereClause.AND.push(scope);
+  if (filters.clientId) whereClause.AND.push({ clientId: filters.clientId });
+  if (filters.status) whereClause.AND.push({ status: filters.status });
+  if (whereClause.AND.length === 0) delete whereClause.AND;
 
-    if (clientId) {
-      whereClause.AND.push({ clientId });
-    }
-    if (status) {
-      whereClause.AND.push({ status });
-    }
+  const [tasks, total] = await Promise.all([
+    prisma.task.findMany({
+      where: whereClause,
+      include: {
+        assignedTo: { select: { id: true, name: true, email: true } },
+        client: { select: { id: true, name: true } },
+        complianceItem: { select: { id: true, type: true } },
+      },
+      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+      skip: (filters.page - 1) * filters.pageSize,
+      take: filters.pageSize,
+    }),
+    prisma.task.count({ where: whereClause }),
+  ]);
 
-    const [tasks, total] = await Promise.all([
-      prisma.task.findMany({
-        where: whereClause,
-        include: {
-          assignedTo: { select: { id: true, name: true, email: true } },
-          client: { select: { id: true, name: true } },
-          complianceItem: { select: { id: true, type: true } },
-        },
-        orderBy: [
-          { dueDate: 'asc' },
-          { createdAt: 'desc' },
-        ],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-      prisma.task.count({ where: whereClause }),
-    ]);
+  return NextResponse.json({ data: tasks, pagination: { page: filters.page, pageSize: filters.pageSize, total } });
+});
 
-    return NextResponse.json({ data: tasks, pagination: { page, pageSize, total } });
-  } catch (error) {
-    console.error('Error fetching tasks:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+export const POST = withAuth(async (req: NextRequest, { user, prisma }) => {
+  const userRole = user.role as Role;
+  const userId = user.id;
+
+  if (userRole !== ROLES.ADMIN && userRole !== ROLES.MANAGER) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-}
 
-export async function POST(request: Request) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  const body = await req.json();
+  const validated = validateBody(body, createTaskSchema);
 
-    if (session.user.role !== ROLES.ADMIN && session.user.role !== ROLES.MANAGER) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    const body = await request.json();
-    const { title, description, assignedToId, clientId, complianceItemId, dueDate } = body;
-
-    if (!title || !assignedToId) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
-
-    const task = await prisma.$transaction(async (tx) => {
-      const newTask = await tx.task.create({
-        data: {
-          title,
-          description,
-          assignedToId,
-          clientId: clientId || null,
-          complianceItemId: complianceItemId || null,
-          dueDate: dueDate ? new Date(dueDate) : null,
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          entityType: 'Task',
-          entityId: newTask.id,
-          action: 'CREATE',
-          userId: session.user.id,
-          diff: { title, assignedToId, clientId, complianceItemId }
-        }
-      });
-
-      return newTask;
+  const task = await prisma.$transaction(async (tx) => {
+    const newTask = await tx.task.create({
+      data: {
+        title: validated.title,
+        description: validated.description,
+        assignedToId: validated.assignedToId,
+        clientId: validated.clientId ?? null,
+        complianceItemId: validated.complianceItemId ?? null,
+        dueDate: validated.dueDate ? new Date(validated.dueDate) : null,
+      },
     });
 
-    return NextResponse.json(task, { status: 201 });
-  } catch (error) {
-    console.error('Error creating task:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+    await tx.auditLog.create({
+      data: {
+        entityType: "Task",
+        entityId: newTask.id,
+        action: "CREATE",
+        userId: userId,
+        diff: {
+          title: validated.title,
+          assignedToId: validated.assignedToId,
+          clientId: validated.clientId,
+          complianceItemId: validated.complianceItemId,
+        },
+      },
+    });
+
+    return newTask;
+  });
+
+  return NextResponse.json(task, { status: 201 });
+});

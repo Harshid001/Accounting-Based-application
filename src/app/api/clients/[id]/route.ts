@@ -1,122 +1,108 @@
-import { NextResponse } from "next/server"
-import { ROLES } from "@/lib/permissions"
-
-import { getServerSession } from "next-auth/next"
-import { authOptions, canAccessClient } from "@/lib/auth"
-
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { ROLES } from "@/lib/permissions";
+import { withAuth, validateBody } from "@/lib/api/withAuth";
+import { updateClientSchema } from "@/lib/api/validators";
 
-export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+type Role = typeof ROLES[keyof typeof ROLES];
 
-    const { id } = await params
-    
-    // Check RBAC for this specific client
-    const hasAccess = await canAccessClient(id, session)
-    if (!hasAccess) {
-      return NextResponse.json({ error: "Forbidden - You do not have access to this client" }, { status: 403 })
-    }
-
-    const client = await prisma.client.findUnique({
-      where: { id },
-      include: {
-        assignedTo: {
-          select: { id: true, name: true, email: true, role: true }
-        },
-        services: {
-          include: { service: true }
-        }
-      }
-    })
-
-    if (!client) {
-      return NextResponse.json({ error: "Client not found" }, { status: 404 })
-    }
-
-    return NextResponse.json(client)
-  } catch (error) {
-    console.error("Error fetching client:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
-  }
+async function checkClientAccess(prisma: typeof import("@/lib/prisma").prisma, clientId: string, userId: string, role: Role) {
+  if (role === ROLES.ADMIN) return true;
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    include: { assignedTo: { select: { id: true } } },
+  });
+  return !!client?.assignedTo.some((u) => u.id === userId);
 }
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { id } = await params
-
-    // Check RBAC for this specific client
-    const hasAccess = await canAccessClient(id, session)
-    if (!hasAccess) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
-    const data = await req.json()
-    const { assignedToIds, ...otherFields } = data
-
-    // Only Admin or Manager can reassign staff
-    let updateData: any = { ...otherFields }
-    
-    if (assignedToIds !== undefined) {
-      if (session.user.role === ROLES.ADMIN || session.user.role === ROLES.MANAGER) {
-        updateData.assignedTo = {
-          set: assignedToIds.map((userId: string) => ({ id: userId }))
-        }
-      } else {
-        // If an Accountant tries to modify assignments, reject the entire request or just ignore that field
-        return NextResponse.json({ error: "Forbidden - You do not have permission to reassign staff" }, { status: 403 })
-      }
-    }
-
-    const client = await prisma.client.update({
-      where: { id },
-      data: updateData,
-      include: {
-        assignedTo: {
-          select: { id: true, name: true, email: true, role: true }
-        }
-      }
-    })
-
-    return NextResponse.json(client)
-  } catch (error) {
-    console.error("Error updating client:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
-  }
+function canDeleteClient(role: Role): boolean {
+  return role === ROLES.ADMIN || role === ROLES.MANAGER;
 }
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { id } = await params
-
-    // Check RBAC for this specific client (must be Admin/Manager for deletion)
-    const hasAccess = await canAccessClient(id, session)
-    if (!hasAccess || (session.user.role !== ROLES.ADMIN && session.user.role !== ROLES.MANAGER)) {
-      return NextResponse.json({ error: "Forbidden - You do not have permission to delete this client" }, { status: 403 })
-    }
-
-    // Prisma won't let you delete if there are foreign keys attached unless cascading deletes are setup.
-    // We have setup onDelete: Cascade in the schema, so this will now safely delete all related records.
-    await prisma.client.delete({
-      where: { id }
-    })
-
-    return NextResponse.json({ success: true })
-  } catch (error: any) {
-    console.error("Error deleting client:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
-  }
+function canReassignStaff(role: Role): boolean {
+  return role === ROLES.ADMIN || role === ROLES.MANAGER;
 }
+
+export const GET = withAuth(async (req: NextRequest, { user, prisma }) => {
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  
+  if (!id) {
+    return NextResponse.json({ error: "Client ID is required" }, { status: 400 });
+  }
+
+  const hasAccess = await checkClientAccess(prisma, id, user.id, user.role as Role);
+  if (!hasAccess) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const client = await prisma.client.findUnique({
+    where: { id },
+    include: {
+      assignedTo: { select: { id: true, name: true, email: true, role: true } },
+      services: { include: { service: true } },
+    },
+  });
+
+  if (!client) {
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(client);
+});
+
+export const PATCH = withAuth(async (req: NextRequest, { user, prisma }) => {
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  
+  if (!id) {
+    return NextResponse.json({ error: "Client ID is required" }, { status: 400 });
+  }
+
+  const userRole = user.role as Role;
+  const hasAccess = await checkClientAccess(prisma, id, user.id, userRole);
+  if (!hasAccess) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = await req.json();
+  const { assignedToIds, ...otherFields } = validateBody(body, updateClientSchema);
+
+  let updateData: Record<string, any> = { ...otherFields };
+
+  if (assignedToIds !== undefined) {
+    if (!canReassignStaff(userRole)) {
+      return NextResponse.json({ error: "Forbidden - Cannot reassign staff" }, { status: 403 });
+    }
+    updateData.assignedTo = { set: assignedToIds.map((userId: string) => ({ id: userId })) };
+  }
+
+  const client = await prisma.client.update({
+    where: { id },
+    data: updateData,
+    include: {
+      assignedTo: { select: { id: true, name: true, email: true, role: true } },
+    },
+  });
+
+  return NextResponse.json(client);
+});
+
+export const DELETE = withAuth(async (req: NextRequest, { user, prisma }) => {
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  
+  if (!id) {
+    return NextResponse.json({ error: "Client ID is required" }, { status: 400 });
+  }
+
+  const userRole = user.role as Role;
+  const hasAccess = await checkClientAccess(prisma, id, user.id, userRole);
+  if (!hasAccess || !canDeleteClient(userRole)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  await prisma.client.delete({ where: { id } });
+
+  return NextResponse.json({ success: true });
+});

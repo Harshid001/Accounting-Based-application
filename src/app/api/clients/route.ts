@@ -1,112 +1,90 @@
-import { NextResponse } from "next/server"
-import { ROLES } from "@/lib/permissions"
-
-import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/lib/auth"
-
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { ROLES } from "@/lib/permissions";
+import { withAuth, validateBody } from "@/lib/api/withAuth";
+import {
+  createClientSchema,
+  updateClientSchema,
+  clientFiltersSchema,
+} from "@/lib/api/validators";
 
-export async function GET(req: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+type Role = typeof ROLES[keyof typeof ROLES];
 
-    const { role, id: userId } = session.user
-    const { searchParams } = new URL(req.url)
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10))
-    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "50", 10)))
-
-    let whereClause = {}
-    
-    // Admin sees all. Others only see assigned clients.
-    if (role !== ROLES.ADMIN) {
-      whereClause = {
-        assignedTo: {
-          some: {
-            id: userId
-          }
-        }
-      }
-    }
-
-    const [clients, total] = await Promise.all([
-      prisma.client.findMany({
-        where: whereClause,
-        include: {
-          assignedTo: {
-            select: { id: true, name: true, email: true, role: true }
-          },
-          services: {
-            include: { service: { select: { id: true, name: true } } }
-          },
-          _count: {
-            select: {
-              complianceItems: true,
-              tasks: true,
-              documents: true,
-            }
-          }
-        },
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-      prisma.client.count({ where: whereClause }),
-    ])
-
-    return NextResponse.json({ data: clients, pagination: { page, pageSize, total } })
-  } catch (error) {
-    console.error("Error fetching clients:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
-  }
+function buildClientWhereClause(role: Role, userId: string) {
+  if (role === ROLES.ADMIN) return {};
+  return { assignedTo: { some: { id: userId } } };
 }
 
-export async function POST(req: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+function checkClientAccess(role: Role, userId: string, clientId: string) {
+  return role === ROLES.ADMIN || prisma.client.findFirst({
+    where: { id: clientId, assignedTo: { some: { id: userId } } },
+    select: { id: true },
+  });
+}
 
-    // Only Admin or Manager can create clients
-    if (session.user.role !== ROLES.ADMIN && session.user.role !== ROLES.MANAGER) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+export const GET = withAuth(async (req: NextRequest, { user }) => {
+  const userRole = user.role as Role;
+  const userId = user.id;
+  const { searchParams } = new URL(req.url);
 
-    const data = await req.json()
+  const filters = clientFiltersSchema.parse({
+    page: searchParams.get("page"),
+    pageSize: searchParams.get("pageSize"),
+  });
 
-    // Automatically add the creator to the assigned staff list 
-    // to ensure they can see the client they just created, 
-    // especially important for non-ADMIN users.
-    const assignedIds = new Set<string>(data.assignedToIds || [])
-    assignedIds.add(session.user.id)
+  const whereClause = buildClientWhereClause(userRole, userId);
 
-    // Create the client
-    const client = await prisma.client.create({
-      data: {
-        name: data.name,
-        type: data.type,
-        pan: data.pan,
-        gstin: data.gstin,
-        tan: data.tan,
-        address: data.address,
-        status: data.status || "ACTIVE",
-        assignedTo: {
-          connect: Array.from(assignedIds).map(id => ({ id }))
+  const [clients, total] = await Promise.all([
+    prisma.client.findMany({
+      where: whereClause,
+      include: {
+        assignedTo: { select: { id: true, name: true, email: true, role: true } },
+        services: { include: { service: { select: { id: true, name: true } } } },
+        _count: {
+          select: { complianceItems: true, tasks: true, documents: true },
         },
       },
-      include: {
-        assignedTo: {
-          select: { id: true, name: true, email: true, role: true }
-        }
-      }
-    })
+      orderBy: { createdAt: "desc" },
+      skip: (filters.page - 1) * filters.pageSize,
+      take: filters.pageSize,
+    }),
+    prisma.client.count({ where: whereClause }),
+  ]);
 
-    return NextResponse.json(client, { status: 201 })
-  } catch (error) {
-    console.error("Error creating client:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+  return NextResponse.json({ data: clients, pagination: { page: filters.page, pageSize: filters.pageSize, total } });
+});
+
+export const POST = withAuth(async (req: NextRequest, { user }) => {
+  const userRole = user.role as Role;
+  const userId = user.id;
+
+  if (!(userRole === ROLES.ADMIN || userRole === ROLES.MANAGER)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-}
+
+  const body = await req.json();
+  const validated = validateBody(body, createClientSchema);
+
+  const assignedIds = new Set(validated.assignedToIds ?? []);
+  assignedIds.add(userId);
+
+  const client = await prisma.client.create({
+    data: {
+      name: validated.name,
+      type: validated.type,
+      email: validated.email,
+      phone: validated.phone,
+      pan: validated.pan,
+      gstin: validated.gstin,
+      tan: validated.tan,
+      address: validated.address,
+      status: validated.status,
+      assignedTo: { connect: Array.from(assignedIds).map((id) => ({ id })) },
+    },
+    include: {
+      assignedTo: { select: { id: true, name: true, email: true, role: true } },
+    },
+  });
+
+  return NextResponse.json(client, { status: 201 });
+});

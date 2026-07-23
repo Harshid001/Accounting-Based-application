@@ -1,177 +1,192 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { ROLES } from "@/lib/permissions";
+import { withAuth, validateBody } from "@/lib/api/withAuth";
+import { createCommentSchema, commentFiltersSchema } from "@/lib/api/validators";
 import { validateEntityAccess, validateMentions } from "@/lib/comments";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 
-export async function GET(req: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+type Role = typeof ROLES[keyof typeof ROLES];
+
+function buildCommentWhereClause(
+  userRole: Role,
+  userId: string,
+  parentType?: string | null,
+  parentId?: string | null
+): Prisma.CommentWhereInput {
+  const where: Prisma.CommentWhereInput = {};
+
+  if (parentType && parentId) {
+    switch (parentType) {
+      case "task":
+        where.taskId = parentId;
+        break;
+      case "client":
+        where.clientId = parentId;
+        break;
+      case "document":
+        where.documentId = parentId;
+        break;
+      case "complianceItem":
+        where.complianceItemId = parentId;
+        break;
+      case "invoice":
+        where.invoiceId = parentId;
+        break;
+      default:
+        throw new Error("Invalid parent type");
     }
-
-    const { searchParams } = new URL(req.url);
-    const parentType = searchParams.get("parentType");
-    const parentId = searchParams.get("parentId");
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "50", 10)));
-
-    // CLIENT role: only allow fetching comments for their own client entity
-    if (session.user.role === "CLIENT") {
-      const userClientId = (session.user as any).clientId;
-      if (!userClientId) {
-        return NextResponse.json({ error: "No client association" }, { status: 403 });
-      }
-
-      // If no parentType/parentId, return all comments scoped to their client
-      if (!parentType || !parentId) {
-        const [comments, total] = await Promise.all([
-          prisma.comment.findMany({
-            where: { clientId: userClientId },
-            include: { User: { select: { id: true, name: true } } },
-            orderBy: { createdAt: "asc" },
-            skip: (page - 1) * pageSize,
-            take: pageSize,
-          }),
-          prisma.comment.count({ where: { clientId: userClientId } }),
-        ]);
-        return NextResponse.json({ data: comments, pagination: { page, pageSize, total } });
-      }
-
-      // Validate they own the entity before returning comments
-      try {
-        const userId = session.user.id || (session.user as any).userId;
-        await validateEntityAccess(userId, session.user.role, parentType, parentId);
-      } catch {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-    }
-
-    // Build query
-    const where: any = {};
-    if (parentType && parentId) {
-      if (parentType === "task") where.taskId = parentId;
-      else if (parentType === "client") where.clientId = parentId;
-      else if (parentType === "document") where.documentId = parentId;
-      else if (parentType === "complianceItem") where.complianceItemId = parentId;
-      else if (parentType === "invoice") where.invoiceId = parentId;
-      else return NextResponse.json({ error: "Invalid parent type" }, { status: 400 });
-    }
-
-    const { role, id: userId } = session.user;
-    
-    // Non-ADMIN staff must be scoped to their assigned clients
-    if (role === "ACCOUNTANT" || role === "MANAGER" || role === "DATA_ENTRY") {
-      const assignedClients = await prisma.client.findMany({
-        where: { assignedTo: { some: { id: userId } } },
-        select: { id: true }
-      });
-      const assignedIds = assignedClients.map(c => c.id);
-      
-      // We ensure the comments they fetch are linked to their assigned clients.
-      // (For firm-level tasks where clientId is null, they can still see them since they are internal staff,
-      // so we use an OR clause: either clientId is in assignedIds, or clientId is null)
-      where.OR = [
-        { clientId: { in: assignedIds } },
-        { clientId: null }
-      ];
-    }
-
-    const [comments, total] = await Promise.all([
-      prisma.comment.findMany({
-        where,
-        include: { User: { select: { id: true, name: true } } },
-        orderBy: { createdAt: "asc" },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-      prisma.comment.count({ where }),
-    ]);
-
-    return NextResponse.json({ data: comments, pagination: { page, pageSize, total } });
-  } catch (error: any) {
-    console.error("Failed to list comments:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
+
+  if (userRole === ROLES.CLIENT) {
+    where.clientId = userId;
+  } else if (
+    userRole === ROLES.ACCOUNTANT ||
+    userRole === ROLES.MANAGER ||
+    userRole === ROLES.DATA_ENTRY
+  ) {
+    where.OR = [
+      { clientId: { in: [] } }, // Will be replaced below
+      { clientId: null },
+    ];
+  }
+
+  return where;
 }
-export async function POST(req: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const userId = session.user.id;
-    const userRole = session.user.role;
 
-    const body = await req.json();
-    const { content, parentType, parentId, mentions } = body;
+export const GET = withAuth(async (req: NextRequest, { user, prisma }) => {
+  const { searchParams } = new URL(req.url);
+  const filters = commentFiltersSchema.parse({
+    page: searchParams.get("page"),
+    pageSize: searchParams.get("pageSize"),
+    parentType: searchParams.get("parentType"),
+    parentId: searchParams.get("parentId"),
+  });
 
-    if (!content || !parentType || !parentId) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-    }
+  const userRole = user.role as Role;
+  const userId = user.id;
 
-    // 1. Validate Access
-    await validateEntityAccess(userId, userRole, parentType, parentId);
-
-    // 2. Validate Mentions (strip out those who shouldn't see this entity)
-    let validMentions: string[] = [];
-    if (mentions && Array.isArray(mentions)) {
-      validMentions = await validateMentions(mentions, parentType, parentId);
+  if (userRole === ROLES.CLIENT) {
+    if (!user.clientId) {
+      return NextResponse.json({ error: "No client association" }, { status: 403 });
     }
 
-    // 3. Map parentType to specific FK field
-    const createData: any = {
-      content,
-      authorId: userId,
-      mentions: validMentions
-    };
-    
-    if (parentType === "task") createData.taskId = parentId;
-    else if (parentType === "client") createData.clientId = parentId;
-    else if (parentType === "document") createData.documentId = parentId;
-    else if (parentType === "complianceItem") createData.complianceItemId = parentId;
-    else if (parentType === "invoice") createData.invoiceId = parentId;
-    else return NextResponse.json({ error: "Invalid parent type" }, { status: 400 });
+    if (!filters.parentType || !filters.parentId) {
+      const [comments, total] = await Promise.all([
+        prisma.comment.findMany({
+          where: { clientId: user.clientId },
+          include: { User: { select: { id: true, name: true } } },
+          orderBy: { createdAt: "asc" },
+          skip: (filters.page - 1) * filters.pageSize,
+          take: filters.pageSize,
+        }),
+        prisma.comment.count({ where: { clientId: user.clientId } }),
+      ]);
+      return NextResponse.json({ data: comments, pagination: { page: filters.page, pageSize: filters.pageSize, total } });
+    }
 
-    // 4. Create in Transaction with AuditLog and Notifications
-    const result = await prisma.$transaction(async (tx) => {
-      const comment = await tx.comment.create({ data: createData });
+    try {
+      await validateEntityAccess(userId, userRole, filters.parentType, filters.parentId);
+    } catch {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
 
-      await tx.auditLog.create({
-        data: {
-          entityType: "Comment",
-          entityId: comment.id,
-          action: "CREATE",
-          userId: userId,
-          diff: { content, parentType, parentId }
-        }
-      });
+  let where = buildCommentWhereClause(userRole, userId, filters.parentType, filters.parentId);
 
-      // N+1 FIX: Batch-create mention notifications with createMany
-      // instead of sequential creates in a loop
-      if (validMentions.length > 0) {
-        await tx.notification.createMany({
-          data: validMentions.map(mentionedUid => ({
-            recipientId: mentionedUid,
-            type: "GENERAL" as const,
-            channel: "IN_APP" as const,
-          })),
-        });
-      }
+  if (
+    userRole === ROLES.ACCOUNTANT ||
+    userRole === ROLES.MANAGER ||
+    userRole === ROLES.DATA_ENTRY
+  ) {
+    const assignedClients = await prisma.client.findMany({
+      where: { assignedTo: { some: { id: userId } } },
+      select: { id: true },
+    });
+    const assignedIds = assignedClients.map((c) => c.id);
+    where.OR = [{ clientId: { in: assignedIds } }, { clientId: null }];
+  }
 
-      return comment;
+  const [comments, total] = await Promise.all([
+    prisma.comment.findMany({
+      where,
+      include: { User: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "asc" },
+      skip: (filters.page - 1) * filters.pageSize,
+      take: filters.pageSize,
+    }),
+    prisma.comment.count({ where }),
+  ]);
+
+  return NextResponse.json({ data: comments, pagination: { page: filters.page, pageSize: filters.pageSize, total } });
+});
+
+export const POST = withAuth(async (req: NextRequest, { user, prisma }) => {
+  const body = await req.json();
+  const validated = validateBody(body, createCommentSchema);
+
+  const { content, parentType, parentId, mentions } = validated;
+  const userId = user.id;
+  const userRole = user.role as Role;
+
+  await validateEntityAccess(userId, userRole, parentType, parentId);
+
+  let validMentions: string[] = [];
+  if (mentions && mentions.length > 0) {
+    validMentions = await validateMentions(mentions, parentType, parentId);
+  }
+
+  const createData: Record<string, any> = {
+    content,
+    authorId: userId,
+    mentions: validMentions,
+  };
+
+  switch (parentType) {
+    case "task":
+      createData.taskId = parentId;
+      break;
+    case "client":
+      createData.clientId = parentId;
+      break;
+    case "document":
+      createData.documentId = parentId;
+      break;
+    case "complianceItem":
+      createData.complianceItemId = parentId;
+      break;
+    case "invoice":
+      createData.invoiceId = parentId;
+      break;
+    default:
+      return NextResponse.json({ error: "Invalid parent type" }, { status: 400 });
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const comment = await tx.comment.create({ data: createData as any });
+
+    await tx.auditLog.create({
+      data: {
+        entityType: "Comment",
+        entityId: comment.id,
+        action: "CREATE",
+        userId,
+        diff: { content, parentType, parentId },
+      },
     });
 
-    return NextResponse.json(result, { status: 201 });
-  } catch (error: any) {
-    console.error("Failed to create comment:", error);
-    if (error.message && error.message.startsWith("FORBIDDEN")) {
-      return NextResponse.json({ error: error.message }, { status: 403 });
+    if (validMentions.length > 0) {
+      await tx.notification.createMany({
+        data: validMentions.map((mentionedUid) => ({
+          recipientId: mentionedUid,
+          type: "GENERAL",
+          channel: "IN_APP",
+        })),
+      });
     }
-    if (error.code === "P2010" || (error.meta && error.meta.message && error.meta.message.includes("check_single_parent"))) {
-       return NextResponse.json({ error: "Database constraint violation on parent IDs" }, { status: 400 });
-    }
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
-  }
-}
+
+    return comment;
+  });
+
+  return NextResponse.json(result, { status: 201 });
+});

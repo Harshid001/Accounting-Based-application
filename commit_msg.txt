@@ -1,0 +1,11 @@
+refactor: major cleanup and architecture improvements
+
+- Delete dead code: duplicate scripts (.js/.ts), legacy prisma schema, 6 root test files, debug artifacts (forensic_audit, gitleaks, db backup), mobile build artifacts
+- Configure Upstash Redis env vars in .env.example with docs
+- Fix invoice sequence race condition using PostgreSQL advisory locks (pg_advisory_xact_lock)
+- Create lib/api/withAuth.ts wrapper eliminating 30x duplicated auth/error handling
+- Add Zod validation schemas for 10 critical API routes (clients, tasks, invoices, comments, users, auth)
+- Extract CreateTaskDialog, ReassignTaskDialog, TaskCard, TaskRow from TasksPage (484 -> 340 lines)
+- Refactor 5 API routes to use withAuth + Zod validation
+- Add .gitignore for mobile/android/app/build/
+- TypeScript compilation passes (tsc --noEmit)
