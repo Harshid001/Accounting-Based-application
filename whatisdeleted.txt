@@ -1,0 +1,46 @@
+$ cmd /c "cd /d D:\NewVolumeE\Accounting Business App && git status"
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   .gitignore
+	deleted:    add_comment_constraint.ts
+	deleted:    check_isolation.ts
+	deleted:    database_backup.json
+	deleted:    delete_s3_image.ts
+	deleted:    fix-prisma.js
+	deleted:    forensic_audit.ts
+	deleted:    prisma/schema.old.prisma
+	deleted:    scripts/activateUsers.js
+	deleted:    scripts/makeAdmin.js
+	deleted:    seed_dev.ts
+	modified:   src/app/api/clients/[id]/route.ts
+	modified:   src/app/api/clients/route.ts
+	modified:   src/app/api/comments/route.ts
+	modified:   src/app/api/invoices/route.ts
+	modified:   src/app/api/tasks/[id]/route.ts
+	modified:   src/app/api/tasks/route.ts
+	modified:   src/app/dashboard/tasks/page.tsx
+	deleted:    test-s3.mjs
+	deleted:    test.ts
+	deleted:    test_comments.ts
+	deleted:    test_invoice.ts
+	deleted:    test_middleware.ts
+	deleted:    test_reporting.ts
+	deleted:    test_reporting_gaps.ts
+	deleted:    trace.js
+	deleted:    verify_dashboard.ts
+	deleted:    verify_images.ts
+	deleted:    verify_s3_image.ts
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	src/components/dashboard/CreateTaskDialog.tsx
+	src/components/dashboard/ReassignTaskDialog.tsx
+	src/components/dashboard/TaskCard.tsx
+	src/components/dashboard/TaskRow.tsx
+	src/lib/api/
+
+no changes added to commit (use "git add" and/or "git commit -a")

@@ -52,6 +52,8 @@ export function withAuth(
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
 
+      console.log('withAuth session:', JSON.stringify(session, null, 2));
+
       const user: AuthenticatedUser = {
         id: session.user.id,
         email: session.user.email ?? "",
