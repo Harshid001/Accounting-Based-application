@@ -116,11 +116,11 @@ export function TaskDashboard() {
     loadTasks()
     if (role && canCreateTask(role)) {
       fetch("/api/clients")
-        .then((r) => (r.ok ? r.json() : []))
-        .then(setClients)
+        .then((r) => (r.ok ? r.json() : { data: [] }))
+        .then((res) => setClients(res.data || []))
       fetch("/api/users?role=STAFF")
-        .then((r) => (r.ok ? r.json() : []))
-        .then(setStaff)
+        .then((r) => (r.ok ? r.json() : { data: [] }))
+        .then((res) => setStaff(res.data || []))
     }
   }, [loadTasks, role])
 
