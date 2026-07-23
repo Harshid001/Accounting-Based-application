@@ -27,7 +27,7 @@ export default function NewClientPage() {
   useEffect(() => {
     fetch("/api/users")
       .then(res => res.json())
-      .then(data => setUsers(data))
+      .then(data => setUsers(data.data))
       .catch(err => console.error(err))
   }, [])
 
