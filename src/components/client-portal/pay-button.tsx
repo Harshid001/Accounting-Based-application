@@ -65,10 +65,11 @@ export function PayButton({ invoiceId, amount }: { invoiceId: string, amount: nu
 
       const rzp = new window.Razorpay(options)
       
-      rzp.on('payment.failed', function (response: { error: { description?: string } }){
-        alert("Payment failed: " + response.error.description);
+      rzp.on('payment.failed', ((response: unknown) => {
+        const err = response as { error: { description?: string } };
+        alert("Payment failed: " + err.error.description);
         // The webhook handles the 'payment.failed' event to update PaymentIntent status to FAILED.
-      });
+      }) as (response: unknown) => void);
 
       rzp.open()
     } catch (err: unknown) {

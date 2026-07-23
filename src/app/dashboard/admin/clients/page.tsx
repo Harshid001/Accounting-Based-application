@@ -363,7 +363,7 @@ export default function AdminClientsPage() {
                   <div className="pt-3 border-t border-border/50 flex items-center gap-2">
                     <Select
                       value={client.status}
-                      onValueChange={(val) => handleStatusChange(client.id, val)}
+                      onValueChange={(val) => { if (val) handleStatusChange(client.id, val) }}
                       disabled={updatingId === client.id}
                     >
                       <SelectTrigger className="w-full h-9 text-xs font-medium">
@@ -446,7 +446,7 @@ export default function AdminClientsPage() {
                         <TableCell>
                           <Select
                             value={client.status}
-                            onValueChange={(val) => handleStatusChange(client.id, val)}
+                            onValueChange={(val) => { if (val) handleStatusChange(client.id, val) }}
                             disabled={updatingId === client.id}
                           >
                             <SelectTrigger className="w-[140px]">

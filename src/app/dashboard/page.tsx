@@ -11,7 +11,7 @@ interface DashboardStats {
   upcomingDeadlines?: number;
   pendingDocuments?: number;
   employeeWorkload?: {
-    user: { name: string | null; email: string | null };
+    user: { id: string; name: string | null; email: string | null } | null;
     count: number;
   }[];
 }
@@ -105,14 +105,15 @@ export default function DashboardPage() {
             {stats.employeeWorkload.map((work) => {
               const percentage = Math.min((work.count / 20) * 100, 100);
               const isHighLoad = work.count > 15;
+              const userName = work.user?.name || work.user?.email || "Unknown";
               return (
-                <div key={work.user.id} className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-8 py-4 transition-colors duration-150 hover:bg-muted/30">
+                <div key={work.user?.id ?? work.count} className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-8 py-4 transition-colors duration-150 hover:bg-muted/30">
                   <div className="flex items-center gap-3 min-w-[200px]">
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm border border-border/50 ring-2 ring-background shrink-0">
-                      {(work.user.name || work.user.email).charAt(0).toUpperCase()}
+                      {userName.charAt(0).toUpperCase()}
                     </div>
                     <span className="font-medium text-foreground text-sm">
-                      {work.user.name || work.user.email}
+                      {userName}
                     </span>
                   </div>
 

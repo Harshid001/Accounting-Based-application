@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
 // We avoid coercing strings back to numbers for precision.
 // The data passed to this component must have values pre-formatted as strings.
 interface RevenueReportData {
-  period: { start: string; end: string };
+  period: { start: Date | string; end: Date | string };
   metrics: { totalBilled: string; totalCollected: string; outstandingBalance: string };
 }
 
@@ -89,7 +89,7 @@ interface ComplianceStatusEntry {
 }
 
 interface ComplianceReportData {
-  period: { start: string; end: string };
+  period: { start: Date | string; end: Date | string };
   metrics: {
     statusBreakdown: ComplianceStatusEntry[];
     overdueCount: number;
@@ -135,17 +135,17 @@ const ComplianceReport = ({ data }: { data: ComplianceReportData }) => (
 );
 
 export async function generateReportPDF(type: 'revenue' | 'compliance', data: RevenueReportData | ComplianceReportData) {
-  const element = type === 'revenue' 
-    ? <RevenueReport data={data} /> 
-    : <ComplianceReport data={data} />;
+  const element = type === 'revenue'
+    ? <RevenueReport data={data as RevenueReportData} />
+    : <ComplianceReport data={data as ComplianceReportData} />;
   
   return await renderToStream(element);
 }
 
 interface InvoiceTemplateData {
   invoiceNumber: string;
-  issueDate: string;
-  dueDate: string;
+  issueDate: Date | string;
+  dueDate: Date | string;
   status: string;
   client?: { name?: string } | null;
   subtotal: { toString: () => string };

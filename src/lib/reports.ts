@@ -116,7 +116,7 @@ export async function getRevenueReportData(userId: string, role: string, startDa
 export async function getComplianceReportData(userId: string, role: string, startDate?: string, endDate?: string, clientId?: string) {
   // Check cache first
   const cacheKey = `report:compliance:${userId}:${role}:${startDate || ""}:${endDate || ""}:${clientId || ""}`;
-  const cached = await appCache.get<{ period: { start: Date; end: Date }; metrics: { statusBreakdown: unknown; typeBreakdown: unknown; overdueCount: number } }>(cacheKey);
+  const cached = await appCache.get<{ period: { start: Date; end: Date }; metrics: { statusBreakdown: { status: string; _count: { id: number } }[]; typeBreakdown: { type: string; _count: { id: number } }[]; overdueCount: number } }>(cacheKey);
   if (cached) return cached;
 
   const { start, end, clientIdsFilter } = await validateReportParams(userId, role, startDate, endDate, clientId);
