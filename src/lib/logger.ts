@@ -21,8 +21,6 @@ import { randomUUID } from "crypto";
 const isProd = process.env.NODE_ENV === "production";
 const isTest = process.env.NODE_ENV === "test";
 
-// Paths are matched against any object logged, at any depth (pino supports
-// wildcards). Keep this list broad — better to over-redact than leak a secret.
 const REDACT_PATHS = [
   "password",
   "*.password",
