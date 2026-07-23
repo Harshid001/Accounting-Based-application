@@ -42,7 +42,12 @@ const styles = StyleSheet.create({
 
 // We avoid coercing strings back to numbers for precision.
 // The data passed to this component must have values pre-formatted as strings.
-const RevenueReport = ({ data }: { data: any }) => (
+interface RevenueReportData {
+  period: { start: string; end: string };
+  metrics: { totalBilled: string; totalCollected: string; outstandingBalance: string };
+}
+
+const RevenueReport = ({ data }: { data: RevenueReportData }) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <Text style={styles.header}>Revenue Report</Text>
@@ -78,7 +83,20 @@ const RevenueReport = ({ data }: { data: any }) => (
   </Document>
 );
 
-const ComplianceReport = ({ data }: { data: any }) => (
+interface ComplianceStatusEntry {
+  status: string;
+  _count: { id: number };
+}
+
+interface ComplianceReportData {
+  period: { start: string; end: string };
+  metrics: {
+    statusBreakdown: ComplianceStatusEntry[];
+    overdueCount: number;
+  };
+}
+
+const ComplianceReport = ({ data }: { data: ComplianceReportData }) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <Text style={styles.header}>Compliance Report</Text>
@@ -97,7 +115,7 @@ const ComplianceReport = ({ data }: { data: any }) => (
 
       <View style={styles.section}>
         <Text style={styles.title}>Status Breakdown</Text>
-        {data.metrics.statusBreakdown.map((s: any) => (
+        {data.metrics.statusBreakdown.map((s: ComplianceStatusEntry) => (
           <View style={styles.row} key={s.status}>
             <Text style={styles.label}>{s.status}:</Text>
             <Text style={styles.value}>{s._count.id}</Text>
@@ -116,7 +134,7 @@ const ComplianceReport = ({ data }: { data: any }) => (
   </Document>
 );
 
-export async function generateReportPDF(type: 'revenue' | 'compliance', data: any) {
+export async function generateReportPDF(type: 'revenue' | 'compliance', data: RevenueReportData | ComplianceReportData) {
   const element = type === 'revenue' 
     ? <RevenueReport data={data} /> 
     : <ComplianceReport data={data} />;
@@ -124,7 +142,18 @@ export async function generateReportPDF(type: 'revenue' | 'compliance', data: an
   return await renderToStream(element);
 }
 
-const InvoiceTemplate = ({ invoice }: { invoice: any }) => (
+interface InvoiceTemplateData {
+  invoiceNumber: string;
+  issueDate: string;
+  dueDate: string;
+  status: string;
+  client?: { name?: string } | null;
+  subtotal: { toString: () => string };
+  taxTotal: { toString: () => string };
+  total: { toString: () => string };
+}
+
+const InvoiceTemplate = ({ invoice }: { invoice: InvoiceTemplateData }) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <Text style={styles.header}>INVOICE</Text>
@@ -172,6 +201,6 @@ const InvoiceTemplate = ({ invoice }: { invoice: any }) => (
   </Document>
 );
 
-export async function generateInvoicePDF(invoice: any) {
+export async function generateInvoicePDF(invoice: InvoiceTemplateData) {
   return await renderToStream(<InvoiceTemplate invoice={invoice} />);
 }

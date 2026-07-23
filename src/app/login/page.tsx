@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useMemo, Suspense } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -12,23 +12,25 @@ function LoginForm() {
   const searchParams = useSearchParams()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [error, setError] = useState("")
+  const [formError, setFormError] = useState("")
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
+  const urlError = useMemo(() => {
     const errorParam = searchParams.get("error")
     if (errorParam === "OAuthAccountNotLinked") {
-      setError("An account already exists with this email. Please sign in with your password instead.")
+      return "An account already exists with this email. Please sign in with your password instead."
     } else if (errorParam === "AccessDenied") {
-      setError("Access denied.")
+      return "Access denied."
     } else if (errorParam) {
-      setError("An error occurred during authentication.")
+      return "An error occurred during authentication."
     }
+    return ""
   }, [searchParams])
+  const error = formError || urlError
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError("")
+    setFormError("")
     setLoading(true)
 
     const result = await signIn("credentials", {
@@ -38,7 +40,7 @@ function LoginForm() {
     })
 
     if (result?.error) {
-      setError("Invalid email or password")
+      setFormError("Invalid email or password")
       setLoading(false)
     } else {
       router.push("/dashboard")
@@ -75,29 +77,32 @@ function LoginForm() {
           })
           
           if (result?.error) {
-            setError(result.error)
+            setFormError(result.error)
             setLoading(false)
           } else {
             router.push("/dashboard")
             router.refresh()
           }
         } else {
-          setError("Failed to get Google token")
+          setFormError("Failed to get Google token")
           setLoading(false)
         }
       } else {
         signIn("google", { callbackUrl: "/dashboard" })
       }
-    } catch (err: any) {
-      if (err?.name === "ConfigurationError") {
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "ConfigurationError") {
         console.error("Configuration Error:", err);
-        setError("Sign-in temporarily unavailable (configuration error).");
-      } else if (err?.code === "SIGN_IN_CANCELED" || err?.message?.includes("cancel")) {
-        console.log("User canceled Google sign-in:", err);
-        setError(""); // Clear the step trace so the UI resets cleanly
+        setFormError("Sign-in temporarily unavailable (configuration error).");
       } else {
-        console.error("Google sign in error:", err);
-        setError("Google sign in failed");
+        const message = err instanceof Error ? err.message : String(err);
+        if (message?.includes("cancel") || (err instanceof Error && (err as { code?: string }).code === "SIGN_IN_CANCELED")) {
+          console.log("User canceled Google sign-in:", err);
+          setFormError(""); // Clear the step trace so the UI resets cleanly
+        } else {
+          console.error("Google sign in error:", err);
+          setFormError("Google sign in failed");
+        }
       }
       setLoading(false);
     }

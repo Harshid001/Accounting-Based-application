@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -54,7 +55,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       })
 
       // Audit Logging
-      const diff: any = {}
+      const diff: Record<string, unknown> = {}
       if (role !== undefined && role !== targetUser.role) {
         diff.role = { old: targetUser.role, new: role }
       }
@@ -72,7 +73,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             entityId: id,
             action: "UPDATE",
             userId: session.user.id,
-            diff
+            diff: diff as Prisma.InputJsonValue
           }
         })
       }

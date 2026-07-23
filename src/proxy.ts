@@ -38,7 +38,7 @@ async function rateLimitMiddleware(request: NextRequest) {
 
 async function authMiddleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const role = (request as any).nextauth?.token?.role as string | undefined;
+  const role = (request as unknown as { nextauth?: { token?: { role?: string } } }).nextauth?.token?.role as string | undefined;
 
   const target = getRedirectTarget(pathname, role);
 

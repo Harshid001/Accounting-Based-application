@@ -1,18 +1,21 @@
 import { describe, it, expect, beforeEach, beforeAll, afterAll, afterEach } from "vitest";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Client, type User, type Task, type Document } from "@prisma/client";
+import type { NextRequest } from "next/server";
 import { clearDatabase, setMockSession, clearMockSession } from "./setup";
 import { POST as createComment } from "../src/app/api/comments/route";
 import { PATCH as patchComment, DELETE as deleteComment } from "../src/app/api/comments/[id]/route";
 
 const prisma = new PrismaClient();
 
+type IdParams = { params: Promise<{ id: string }> };
+
 describe("Comments API", () => {
-  let client: any;
-  let adminUser: any;
-  let accUser: any;
-  let clientUser: any;
-  let task: any;
-  let doc: any;
+  let client: Client;
+  let adminUser: User;
+  let accUser: User;
+  let clientUser: User;
+  let task: Task;
+  let doc: Document;
 
   beforeAll(async () => {
     await clearDatabase();
@@ -62,7 +65,7 @@ describe("Comments API", () => {
     const req = {
       json: async () => ({ content: "anon", parentType: "task", parentId: task.id }),
       headers: new Headers({})
-    } as any;
+    } as unknown as NextRequest;
     const res = await createComment(req);
     expect(res.status).toBe(401);
   });
@@ -72,13 +75,13 @@ describe("Comments API", () => {
     const clientTaskReq = {
       json: async () => ({ content: "What is this task?", parentType: "task", parentId: task.id }),
       headers: new Headers({})
-    } as any;
+    } as unknown as NextRequest;
     const clientTaskRes = await createComment(clientTaskReq);
     expect(clientTaskRes.status).toBe(403);
   });
 
   describe("Valid Comments and Mentions", () => {
-    let createdComment: any;
+    let createdComment: { id: string };
 
     it("should create valid comment and notify mentioned users", async () => {
       setMockSession({ user: { id: accUser.id, role: "ACCOUNTANT" } });
@@ -90,7 +93,7 @@ describe("Comments API", () => {
           mentions: [clientUser.id, "fake_id"] 
         }),
         headers: new Headers({})
-      } as any;
+      } as unknown as NextRequest;
       
       const validCommentRes = await createComment(validCommentReq);
       expect(validCommentRes.status).toBe(201);
@@ -112,7 +115,7 @@ describe("Comments API", () => {
           mentions: [clientUser.id] // Client can't see Task!
         }),
         headers: new Headers({})
-      } as any;
+      } as unknown as NextRequest;
       
       const invalidMentionRes = await createComment(invalidMentionReq);
       expect(invalidMentionRes.status).toBe(201);
@@ -126,8 +129,8 @@ describe("Comments API", () => {
       const editReqAdmin = {
         json: async () => ({ content: "Admin editing" }),
         headers: new Headers({})
-      } as any;
-      const editResAdmin = await patchComment(editReqAdmin, { params: Promise.resolve({ id: createdComment.id }) } as any);
+      } as unknown as NextRequest;
+      const editResAdmin = await patchComment(editReqAdmin, { params: Promise.resolve({ id: createdComment.id }) } as unknown as IdParams);
       expect(editResAdmin.status).toBe(403);
     });
 
@@ -136,8 +139,8 @@ describe("Comments API", () => {
       const editReqAcc = {
         json: async () => ({ content: "Accountant editing own" }),
         headers: new Headers({})
-      } as any;
-      const editResAcc = await patchComment(editReqAcc, { params: Promise.resolve({ id: createdComment.id }) } as any);
+      } as unknown as NextRequest;
+      const editResAcc = await patchComment(editReqAcc, { params: Promise.resolve({ id: createdComment.id }) } as unknown as IdParams);
       expect(editResAcc.status).toBe(200);
     });
 
@@ -145,8 +148,8 @@ describe("Comments API", () => {
       setMockSession({ user: { id: adminUser.id, role: "ADMIN" } });
       const deleteReqAdmin = {
         headers: new Headers({})
-      } as any;
-      const deleteResAdmin = await deleteComment(deleteReqAdmin, { params: Promise.resolve({ id: createdComment.id }) } as any);
+      } as unknown as NextRequest;
+      const deleteResAdmin = await deleteComment(deleteReqAdmin, { params: Promise.resolve({ id: createdComment.id }) } as unknown as IdParams);
       expect(deleteResAdmin.status).toBe(200);
       
       const audit = await prisma.auditLog.findFirst({

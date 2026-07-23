@@ -1,12 +1,13 @@
 
 import { NextAuthOptions } from "next-auth"
+import type { Session } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import GoogleProvider from "next-auth/providers/google"
 import bcrypt from "bcryptjs"
 
 import { prisma } from "@/lib/prisma";
 
-export async function canAccessClient(clientId: string, session: any) {
+export async function canAccessClient(clientId: string, session: Session) {
   if (session.user.role === "ADMIN") return true;
   if (session.user.role === "CLIENT") {
     return session.user.clientId === clientId;
@@ -123,11 +124,16 @@ export const authOptions: NextAuthOptions = {
             }
           }
 
-          // Find an admin user to assign to this client (for staff visibility)
+          // Find an admin (fall back to manager) to assign this client to so it
+          // always has an owner. Admins/managers see all clients regardless, but
+          // the assignment keeps the client accountable to a staff member.
           const adminUser = await prisma.user.findFirst({
             where: { role: "ADMIN", isActive: true },
             select: { id: true }
-          })
+          }) ?? await prisma.user.findFirst({
+            where: { role: "MANAGER", isActive: true },
+            select: { id: true }
+          });
 
           const clientData = await prisma.client.upsert({
             where: { email },
@@ -165,9 +171,10 @@ export const authOptions: NextAuthOptions = {
             role: dbUser.role,
             clientId: dbUser.clientId
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : "Invalid Google token";
           console.error("Native Google auth error:", error)
-          throw new Error(error.message || "Invalid Google token")
+          throw new Error(message)
         }
       }
     })
@@ -179,7 +186,7 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user, account, profile }) {
       if (account?.provider === "google") {
         if (!user.email) return false;
-        if (!(profile as any)?.email_verified) return false;
+        if (!(profile as { email_verified?: boolean } | null)?.email_verified) return false;
         
         let dbUser = await prisma.user.findUnique({
           where: { email: user.email }
@@ -193,17 +200,22 @@ export const authOptions: NextAuthOptions = {
           if (dbUser.role !== "CLIENT") {
             if (!dbUser.isActive) return "/pending-approval";
             user.id = dbUser.id;
-            (user as any).role = dbUser.role;
-            (user as any).clientId = dbUser.clientId;
+            user.role = dbUser.role;
+            user.clientId = dbUser.clientId;
             return true;
           }
         }
         
-        // Find an admin user to assign to this client (for staff visibility)
+        // Find an admin (fall back to manager) to assign this client to so it
+        // always has an owner. Admins/managers see all clients regardless, but
+        // the assignment keeps the client accountable to a staff member.
         const adminUser = await prisma.user.findFirst({
           where: { role: "ADMIN", isActive: true },
           select: { id: true }
-        })
+        }) ?? await prisma.user.findFirst({
+          where: { role: "MANAGER", isActive: true },
+          select: { id: true }
+        });
 
         const clientData = await prisma.client.upsert({
           where: { email: user.email },
@@ -235,8 +247,8 @@ export const authOptions: NextAuthOptions = {
         }
         
         user.id = dbUser.id;
-        (user as any).role = dbUser.role;
-        (user as any).clientId = dbUser.clientId;
+        user.role = dbUser.role;
+        user.clientId = dbUser.clientId;
         return true;
       }
       return true;
@@ -245,8 +257,8 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.role = user.role
         token.id = user.id
-        token.clientId = (user as any).clientId
-        token.image = (user as any).image
+        token.clientId = user.clientId
+        token.image = user.image
       }
       if (trigger === "update" && session) {
         token.name = session.name ?? token.name;
@@ -277,7 +289,7 @@ export const authOptions: NextAuthOptions = {
       session.user.role = dbUser.role;
       session.user.id = token.id as string;
       session.user.image = dbUser.image;
-      (session.user as any).clientId = dbUser.clientId;
+      session.user.clientId = dbUser.clientId;
       
       return session;
     }

@@ -7,14 +7,11 @@
  * Usage: npx ts-node scripts/verify-permissions.ts
  */
 
-import { PrismaClient } from '@prisma/client';
 // You might need to simulate API calls (e.g. using supertest if it were an Express app),
 // but for Next.js App Router, the most robust way in a test script is to fetch against a running local/staging server,
 // injecting mock session tokens. Alternatively, we can mock `getServerSession` and test the route handlers directly.
 
 const BASE_URL = process.env.TEST_API_URL || 'http://localhost:3000';
-
-const ROLES = ['ADMIN', 'MANAGER', 'ACCOUNTANT', 'DATA_ENTRY', 'CLIENT'];
 
 // We will construct a matrix of expected HTTP status codes (200, 403, 401, 404) for given actions.
 
@@ -143,8 +140,9 @@ async function runSuite() {
         console.error(`❌ [${t.role}] ${t.name} - Expected ${t.expectedStatus}, got ${status}`);
         failed++;
       }
-    } catch (err: any) {
-      console.error(`❌ [${t.role}] ${t.name} - Exception: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`❌ [${t.role}] ${t.name} - Exception: ${message}`);
       failed++;
     }
   }

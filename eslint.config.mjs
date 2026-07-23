@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Electron main process entry (CommonJS, not part of the Next.js app):
+    "main.js",
   ]),
 ]);
 

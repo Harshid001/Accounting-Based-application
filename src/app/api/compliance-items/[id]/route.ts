@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next"
 import { authOptions, canAccessClient } from "@/lib/auth"
 import { spawnNextRecurringComplianceItem } from "@/lib/recurrence"
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -43,7 +44,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const oldStatus = item.status
     const newStatus = body.status || oldStatus
 
-    const updateData: any = {}
+    const updateData: Prisma.ComplianceItemUpdateInput = {}
     if (body.status) updateData.status = body.status
     if (body.notes !== undefined) updateData.notes = body.notes
     
@@ -80,7 +81,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           userId: session.user.id,
           authMethod: "SESSION",
           ipAddress: ipAddress,
-          diff: updateData
+          diff: updateData as Prisma.InputJsonValue
         }
       });
 

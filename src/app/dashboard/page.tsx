@@ -5,8 +5,19 @@ import { Loader2, Users, ClipboardList, Clock, FileStack, ArrowUpRight } from 'l
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
+interface DashboardStats {
+  totalClients?: number;
+  pendingTasks?: number;
+  upcomingDeadlines?: number;
+  pendingDocuments?: number;
+  employeeWorkload?: {
+    user: { name: string | null; email: string | null };
+    count: number;
+  }[];
+}
+
 export default function DashboardPage() {
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -54,7 +65,7 @@ export default function DashboardPage() {
           {isFullView ? 'Firm Overview' : 'My Dashboard'}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Here's what is happening across your firm today.
+          Here&apos;s what is happening across your firm today.
         </p>
       </div>
 
@@ -91,7 +102,7 @@ export default function DashboardPage() {
             <p className="text-sm text-muted-foreground mt-0.5">Active tasks assigned to staff members</p>
           </div>
           <div className="divide-y divide-border/60">
-            {stats.employeeWorkload.map((work: any) => {
+            {stats.employeeWorkload.map((work) => {
               const percentage = Math.min((work.count / 20) * 100, 100);
               const isHighLoad = work.count > 15;
               return (

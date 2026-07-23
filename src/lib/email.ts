@@ -45,9 +45,10 @@ export async function sendEmail({ to, subject, html }: SendEmailOptions): Promis
       console.error(`[EMAIL] Resend API error for ${to}:`, error);
       throw new Error(`Email send failed: ${error.message}`);
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     // If resend package is not installed, fall back to console
-    if (err.code === "MODULE_NOT_FOUND" || err.code === "ERR_MODULE_NOT_FOUND") {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code === "MODULE_NOT_FOUND" || code === "ERR_MODULE_NOT_FOUND") {
       console.warn("[EMAIL] 'resend' package not installed — falling back to console.log");
       console.log(`[EMAIL-FALLBACK] To: ${to} | Subject: ${subject}`);
       return;

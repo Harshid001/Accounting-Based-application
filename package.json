@@ -13,7 +13,7 @@
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "postinstall": "prisma generate",
     "test": "npx dotenv-cli -e .env.test -- vitest run --no-file-parallelism",
     "test:watch": "npx dotenv-cli -e .env.test -- vitest --no-file-parallelism",

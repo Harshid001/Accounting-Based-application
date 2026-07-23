@@ -1,36 +1,47 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, MessageSquare, Send } from "lucide-react"
 
+interface Comment {
+  id: string
+  content: string
+  authorId: string
+  createdAt: string
+  User?: { name: string | null }
+}
+
 export function CommentClient() {
   const { data: session } = useSession()
-  const clientId = (session?.user as any)?.clientId
+  const clientId = session?.user?.clientId
 
-  const [comments, setComments] = useState<any[]>([])
+  const [comments, setComments] = useState<Comment[]>([])
   const [content, setContent] = useState("")
   const [loading, setLoading] = useState(false)
 
-  const fetchComments = async () => {
-    if (!clientId) return
-    try {
-      // Server determines client scope from session; no clientId param needed
-      const res = await fetch(`/api/comments`)
-      if (res.ok) {
-        const _resData = await res.json()
-          const data = _resData.data || _resData
-        setComments(data)
-      }
-    } catch (err) {
-      console.error(err)
-    }
-  }
+  const fetchCommentsRef = useRef<() => void>(() => {})
 
   useEffect(() => {
-    fetchComments()
+    if (!clientId) return
+    let cancelled = false
+    const doFetch = async () => {
+      try {
+        const res = await fetch(`/api/comments`)
+        if (res.ok) {
+          const _resData = await res.json()
+          const data = _resData.data || _resData
+          if (!cancelled) setComments(data)
+        }
+      } catch (err) {
+        console.error(err)
+      }
+    }
+    fetchCommentsRef.current = doFetch
+    doFetch()
+    return () => { cancelled = true }
   }, [clientId])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -51,9 +62,9 @@ export function CommentClient() {
       }
 
       setContent("")
-      fetchComments()
-    } catch (err: any) {
-      alert(err.message)
+      fetchCommentsRef.current()
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
     }
@@ -71,7 +82,7 @@ export function CommentClient() {
           {comments.length === 0 ? (
             <div className="text-center text-muted-foreground mt-12">No messages yet.</div>
           ) : (
-            comments.map((comment: any) => {
+            comments.map((comment) => {
               const isMe = comment.authorId === session?.user?.id
               return (
                 <div key={comment.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>

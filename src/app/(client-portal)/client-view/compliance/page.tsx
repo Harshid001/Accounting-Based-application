@@ -11,7 +11,7 @@ export default async function ClientCompliancePage() {
     redirect("/login")
   }
 
-  const clientId = (session.user as any).clientId
+  const clientId = session.user.clientId
   if (!clientId) {
     return <div className="p-8 text-center text-muted-foreground">No client account associated.</div>
   }
@@ -45,7 +45,7 @@ export default async function ClientCompliancePage() {
             </TableHeader>
             <TableBody>
               {complianceItems.map((item) => {
-                let badgeVariant: any = "outline"
+                let badgeVariant: "default" | "secondary" | "destructive" | "outline" = "outline"
                 if (item.status === "FILED" || item.status === "ACKNOWLEDGED") badgeVariant = "default"
                 if (item.status === "PENDING") badgeVariant = "destructive"
                 if (item.status === "IN_PROGRESS") badgeVariant = "secondary"

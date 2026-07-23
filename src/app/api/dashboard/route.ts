@@ -1,15 +1,17 @@
 import { NextResponse } from 'next/server';
 
 import { getServerSession } from "next-auth/next";
+import type { Session } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { ROLES, isStaffLeadership } from "@/lib/permissions";
+import type { Role } from "@/lib/permissions";
 
 import { prisma } from "@/lib/prisma";
 import { appCache } from "@/lib/cache";
 
 const DASHBOARD_CACHE_TTL = 60_000; // 60 seconds
 
-function taskScopeWhere(user: any) {
+function taskScopeWhere(user: Session["user"]) {
   if (user.role === ROLES.ADMIN) return {};
   if (user.role === ROLES.MANAGER) {
     return {
@@ -22,7 +24,7 @@ function taskScopeWhere(user: any) {
   return { assignedToId: user.id };
 }
 
-function clientScopeWhere(user: any) {
+function clientScopeWhere(user: Session["user"]) {
   if (user.role === ROLES.ADMIN) return {};
   // For Manager, Accountant, Data Entry, it's clients they are assigned to.
   return { assignedTo: { some: { id: user.id } } };
@@ -36,7 +38,7 @@ export async function GET(request: Request) {
     }
 
     const user = session.user;
-    const isFullView = isStaffLeadership(user.role as any);
+    const isFullView = isStaffLeadership(user.role as Role);
 
     // Check cache — key includes userId + role to prevent data leakage
     const cacheKey = `dashboard:${user.id}:${user.role}`;

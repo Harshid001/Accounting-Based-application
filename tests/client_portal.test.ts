@@ -6,7 +6,7 @@ import crypto from 'crypto'
 // Must be declared before imports of the modules they mock.
 
 // Mock getServerSession — we control the returned session per test
-let mockSession: any = null
+let mockSession: { user: { id: string; role: string; clientId?: string } } | null = null
 vi.mock('next-auth/next', () => ({
   getServerSession: vi.fn(() => Promise.resolve(mockSession))
 }))
@@ -30,11 +30,11 @@ vi.mock('razorpay', () => {
 
 // Mock react-pdf for the download route (renderToStream)
 vi.mock('@react-pdf/renderer', () => ({
-  Document: ({ children }: any) => children,
-  Page: ({ children }: any) => children,
-  Text: ({ children }: any) => children,
-  View: ({ children }: any) => children,
-  StyleSheet: { create: (s: any) => s },
+  Document: ({ children }: { children: unknown }) => children,
+  Page: ({ children }: { children: unknown }) => children,
+  Text: ({ children }: { children: unknown }) => children,
+  View: ({ children }: { children: unknown }) => children,
+  StyleSheet: { create: (s: unknown) => s },
   renderToStream: vi.fn().mockResolvedValue(
     new ReadableStream({
       start(controller) {
@@ -52,6 +52,8 @@ import { POST as webhookPost } from '@/app/api/webhooks/razorpay/route'
 import { getRedirectTarget } from '@/lib/middleware-logic'
 
 const prisma = new PrismaClient()
+
+type IdParams = { params: Promise<{ id: string }> }
 
 const WEBHOOK_SECRET = "test_secret_for_vitest"
 
@@ -372,7 +374,7 @@ describe('Client Portal & Razorpay', () => {
       }
 
       const req = new Request('http://localhost/api/invoices/download', { method: 'GET' })
-      const res = await downloadGet(req, { params: Promise.resolve({ id: otherInvoiceId }) } as any)
+      const res = await downloadGet(req, { params: Promise.resolve({ id: otherInvoiceId }) } as unknown as IdParams)
 
       expect(res.status).toBe(403)
       const json = await res.json()
@@ -385,7 +387,7 @@ describe('Client Portal & Razorpay', () => {
       }
 
       const req = new Request('http://localhost/api/invoices/download', { method: 'GET' })
-      const res = await downloadGet(req, { params: Promise.resolve({ id: invoiceId }) } as any)
+      const res = await downloadGet(req, { params: Promise.resolve({ id: invoiceId }) } as unknown as IdParams)
 
       expect(res.status).toBe(200)
       expect(res.headers.get('Content-Type')).toBe('application/pdf')
@@ -397,7 +399,7 @@ describe('Client Portal & Razorpay', () => {
       }
 
       const req = new Request('http://localhost/api/invoices/download', { method: 'GET' })
-      const res = await downloadGet(req, { params: Promise.resolve({ id: otherInvoiceId }) } as any)
+      const res = await downloadGet(req, { params: Promise.resolve({ id: otherInvoiceId }) } as unknown as IdParams)
 
       expect(res.status).toBe(200)
     })
@@ -406,7 +408,7 @@ describe('Client Portal & Razorpay', () => {
       mockSession = null
 
       const req = new Request('http://localhost/api/invoices/download', { method: 'GET' })
-      const res = await downloadGet(req, { params: Promise.resolve({ id: invoiceId }) } as any)
+      const res = await downloadGet(req, { params: Promise.resolve({ id: invoiceId }) } as unknown as IdParams)
 
       expect(res.status).toBe(401)
     })

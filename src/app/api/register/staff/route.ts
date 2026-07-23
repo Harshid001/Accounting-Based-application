@@ -56,14 +56,15 @@ export async function POST(req: Request) {
           },
         });
       });
-    } catch (txErr: any) {
-      if (txErr.message === "INVITE_ALREADY_USED") {
+    } catch (txErr: unknown) {
+      const txMessage = txErr instanceof Error ? txErr.message : String(txErr);
+      if (txMessage === "INVITE_ALREADY_USED") {
         return new NextResponse("Invite has already been used", { status: 400 });
       }
       throw txErr;
     }
 
-    return NextResponse.json({ success: true, userId: (createdUser as any).id });
+    return NextResponse.json({ success: true, userId: createdUser!.id });
   } catch (error) {
     console.error("[REGISTER_STAFF_POST]", error);
     return new NextResponse("Internal Error", { status: 500 });

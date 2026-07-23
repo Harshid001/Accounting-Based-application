@@ -5,7 +5,7 @@ import { PrismaClient } from "@prisma/client";
 // All routes now use getServerSession(authOptions) instead of x-mock-* headers.
 // This module lets individual tests inject a fake session per-call.
 
-let _mockSession: any = null;
+let _mockSession: { user: { id: string; role: string; email?: string; clientId?: string } } | null = null;
 
 /**
  * Call this before a test to set the session that getServerSession will return.

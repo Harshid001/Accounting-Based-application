@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { X, Download, Smartphone } from "lucide-react";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -8,61 +8,61 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+const emptySubscribe = () => () => {};
+
 export function InstallPWA() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isIOS, setIsIOS] = useState(false);
-  const [showBanner, setShowBanner] = useState(false);
-  const [isInstalled, setIsInstalled] = useState(false);
+  const [promptBannerVisible, setPromptBannerVisible] = useState(false);
+  const [installAcknowledged, setInstallAcknowledged] = useState(false);
+
+  const isStandalone = useSyncExternalStore(
+    emptySubscribe,
+    () =>
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true,
+    () => false
+  );
+  const isIOS = useSyncExternalStore(
+    emptySubscribe,
+    () => /iphone|ipad|ipod/i.test(navigator.userAgent),
+    () => false
+  );
+
+  const isDismissed = useSyncExternalStore(
+    emptySubscribe,
+    () => localStorage.getItem("pwa-banner-dismissed") === "1",
+    () => false
+  );
+
+  const showBanner = !isStandalone && !isDismissed && (promptBannerVisible || isIOS);
+  const isInstalled = isStandalone || installAcknowledged;
 
   useEffect(() => {
-    // Check if already installed (running in standalone mode)
-    const isStandalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as any).standalone === true;
+    if (isStandalone || isIOS || isDismissed) return;
 
-    if (isStandalone) {
-      setIsInstalled(true);
-      return;
-    }
-
-    // Check if dismissed before
-    const dismissed = localStorage.getItem("pwa-banner-dismissed");
-    if (dismissed) return;
-
-    // Detect iOS
-    const iOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    setIsIOS(iOS);
-
-    if (iOS) {
-      // Show iOS manual instructions
-      setShowBanner(true);
-      return;
-    }
-
-    // Listen for Chrome/Android install prompt
     const handler = (e: Event) => {
       e.preventDefault();
       setInstallPrompt(e as BeforeInstallPromptEvent);
-      setShowBanner(true);
+      setPromptBannerVisible(true);
     };
 
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
-  }, []);
+  }, [isStandalone, isIOS, isDismissed]);
 
   const handleInstall = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
     if (outcome === "accepted") {
-      setShowBanner(false);
-      setIsInstalled(true);
+      setPromptBannerVisible(false);
+      setInstallAcknowledged(true);
     }
     setInstallPrompt(null);
   };
 
   const handleDismiss = () => {
-    setShowBanner(false);
+    setPromptBannerVisible(false);
     localStorage.setItem("pwa-banner-dismissed", "1");
   };
 

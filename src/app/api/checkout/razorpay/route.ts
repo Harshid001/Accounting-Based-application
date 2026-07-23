@@ -25,7 +25,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 })
     }
 
-    if (invoice.clientId !== (session.user as any).clientId) {
+    if (invoice.clientId !== session.user.clientId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -86,8 +86,9 @@ export async function POST(req: Request) {
       paymentIntentId: order.id
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Checkout Error:", error)
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 })
+    const message = error instanceof Error ? error.message : String(error)
+    return NextResponse.json({ error: message || "Internal Server Error" }, { status: 500 })
   }
 }

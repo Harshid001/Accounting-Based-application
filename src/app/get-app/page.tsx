@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -9,22 +9,24 @@ interface BeforeInstallPromptEvent extends Event {
 
 export default function GetAppPage() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
   const [installing, setInstalling] = useState(false);
 
-  useEffect(() => {
-    // Already installed as PWA?
-    const standalone =
+  const isInstalled = useSyncExternalStore(
+    () => () => {},
+    () =>
       window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as any).standalone === true;
-    if (standalone) { setIsInstalled(true); return; }
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true,
+    () => false
+  );
+  const isIOS = useSyncExternalStore(
+    () => () => {},
+    () => /iphone|ipad|ipod/i.test(navigator.userAgent),
+    () => false
+  );
 
-    // iOS detection
-    if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
-      setIsIOS(true); return;
-    }
+  useEffect(() => {
+    if (isInstalled || isIOS) return;
 
     // Capture Android/Chrome install prompt
     const handler = (e: Event) => {
@@ -33,7 +35,7 @@ export default function GetAppPage() {
     };
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
-  }, []);
+  }, [isInstalled, isIOS]);
 
   const handleInstall = async () => {
     if (isIOS) { setShowIOSGuide(true); return; }
@@ -45,7 +47,9 @@ export default function GetAppPage() {
     setInstalling(true);
     await installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
-    if (outcome === "accepted") setIsInstalled(true);
+    if (outcome === "accepted") {
+      window.location.reload();
+    }
     setInstalling(false);
     setInstallPrompt(null);
   };
@@ -135,7 +139,7 @@ export default function GetAppPage() {
               </div>
               <ol style={{ paddingLeft: "1.2rem", color: "#94a3b8", fontSize: "0.875rem", lineHeight: 2 }}>
                 <li>Open this page in <strong style={{ color: "#e2e8f0" }}>Chrome</strong></li>
-                <li>Tap <strong style={{ color: "#a5b4fc" }}>"Install App Now"</strong> above</li>
+                <li>Tap <strong style={{ color: "#a5b4fc" }}>&quot;Install App Now&quot;</strong> above</li>
                 <li>Confirm install in the popup</li>
                 <li>✅ App is on your home screen!</li>
               </ol>
@@ -150,7 +154,7 @@ export default function GetAppPage() {
               <ol style={{ paddingLeft: "1.2rem", color: "#94a3b8", fontSize: "0.875rem", lineHeight: 2 }}>
                 <li>Open this page in <strong style={{ color: "#e2e8f0" }}>Safari</strong></li>
                 <li>Tap the <strong style={{ color: "#c4b5fd" }}>Share ⎙</strong> button</li>
-                <li>Tap <strong style={{ color: "#c4b5fd" }}>"Add to Home Screen"</strong></li>
+                <li>Tap <strong style={{ color: "#c4b5fd" }}>&quot;Add to Home Screen&quot;</strong></li>
                 <li>✅ App is on your home screen!</li>
               </ol>
             </div>

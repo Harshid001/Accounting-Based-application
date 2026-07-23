@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, use } from "react"
+import { useState, useEffect, use, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
@@ -11,87 +11,141 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Download, Archive, Plus, Upload, Printer, ClipboardList, Clock, Edit3 } from "lucide-react"
 
+interface AssignedUser {
+  id: string
+  name: string | null
+  role: string
+}
+
+interface ClientService {
+  id: string
+  service: { name: string }
+}
+
+interface Client {
+  name: string
+  type: string
+  status: string
+  pan: string | null
+  gstin: string | null
+  tan: string | null
+  address: string | null
+  assignedTo?: AssignedUser[]
+  services?: ClientService[]
+}
+
+interface ClientDocument {
+  id: string
+  fileName: string
+  type: string
+}
+
+interface ComplianceItem {
+  id: string
+  type: string
+  status: string
+  dueDate: string
+  notes: string | null
+}
+
+interface Task {
+  id: string
+  title: string
+  status: string
+  dueDate?: string | null
+  assignedTo?: { name: string | null; email: string | null } | null
+}
+
 export default function ClientProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { data: session } = useSession()
   const resolvedParams = use(params)
-  
-  const [client, setClient] = useState<any>(null)
+
+  const [client, setClient] = useState<Client | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [activeTab, setActiveTab] = useState<"profile" | "documents" | "compliance" | "tasks">("profile")
 
   // Documents state
-  const [documents, setDocuments] = useState<any[]>([])
+  const [documents, setDocuments] = useState<ClientDocument[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState("")
   const [docForm, setDocForm] = useState({ type: "BANK_STATEMENT" })
 
   // Compliance state
-  const [complianceItems, setComplianceItems] = useState<any[]>([])
+  const [complianceItems, setComplianceItems] = useState<ComplianceItem[]>([])
   const [compForm, setCompForm] = useState({ type: "GST", dueDate: "", notes: "" })
 
   // Tasks state
-  const [tasks, setTasks] = useState<any[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
 
-  const fetchTasks = async () => {
-    try {
-      const res = await fetch(`/api/tasks?clientId=${resolvedParams.id}`)
-      if (res.ok) {
-        const _resData = await res.json()
-          const data = _resData.data || _resData
-        setTasks(data)
-      }
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
-  const fetchClientData = async () => {
-    try {
-      const res = await fetch(`/api/clients/${resolvedParams.id}`)
-      if (!res.ok) throw new Error("Failed to load client details")
-      const _resData = await res.json()
-          const data = _resData.data || _resData
-      setClient(data)
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchDocuments = async () => {
-    try {
-      const res = await fetch(`/api/clients/${resolvedParams.id}/documents`)
-      if (res.ok) {
-        const _resData = await res.json()
-          const data = _resData.data || _resData
-        setDocuments(data)
-      }
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
-  const fetchCompliance = async () => {
-    try {
-      const res = await fetch(`/api/clients/${resolvedParams.id}/compliance-items`)
-      if (res.ok) {
-        const _resData = await res.json()
-          const data = _resData.data || _resData
-        setComplianceItems(data)
-      }
-    } catch (err) {
-      console.error(err)
-    }
-  }
+  const fetchTasksRef = useRef<() => void>(() => {})
+  const fetchClientDataRef = useRef<() => void>(() => {})
+  const fetchDocumentsRef = useRef<() => void>(() => {})
+  const fetchComplianceRef = useRef<() => void>(() => {})
 
   useEffect(() => {
-    fetchClientData()
-    fetchDocuments()
-    fetchCompliance()
-    fetchTasks()
+    let cancelled = false
+
+    fetchTasksRef.current = async () => {
+      try {
+        const res = await fetch(`/api/tasks?clientId=${resolvedParams.id}`)
+        if (res.ok) {
+          const _resData = await res.json()
+          const data = _resData.data || _resData
+          if (!cancelled) setTasks(data)
+        }
+      } catch (err) {
+        console.error(err)
+      }
+    }
+
+    fetchClientDataRef.current = async () => {
+      try {
+        const res = await fetch(`/api/clients/${resolvedParams.id}`)
+        if (!res.ok) throw new Error("Failed to load client details")
+        const _resData = await res.json()
+        const data = _resData.data || _resData
+        if (!cancelled) setClient(data)
+      } catch (err: unknown) {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    fetchDocumentsRef.current = async () => {
+      try {
+        const res = await fetch(`/api/clients/${resolvedParams.id}/documents`)
+        if (res.ok) {
+          const _resData = await res.json()
+          const data = _resData.data || _resData
+          if (!cancelled) setDocuments(data)
+        }
+      } catch (err) {
+        console.error(err)
+      }
+    }
+
+    fetchComplianceRef.current = async () => {
+      try {
+        const res = await fetch(`/api/clients/${resolvedParams.id}/compliance-items`)
+        if (res.ok) {
+          const _resData = await res.json()
+          const data = _resData.data || _resData
+          if (!cancelled) setComplianceItems(data)
+        }
+      } catch (err) {
+        console.error(err)
+      }
+    }
+
+    fetchClientDataRef.current()
+    fetchDocumentsRef.current()
+    fetchComplianceRef.current()
+    fetchTasksRef.current()
+
+    return () => { cancelled = true }
   }, [resolvedParams.id])
 
   // --- Document Upload Logic ---
@@ -133,9 +187,9 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
         }
       }
 
-      fetchDocuments()
-    } catch (err: any) {
-      setUploadError(err.message)
+      fetchDocumentsRef.current()
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : String(err))
     } finally {
       setUploading(false)
       e.target.value = ""
@@ -150,7 +204,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
         body: JSON.stringify({ archived: true })
       })
       if (res.ok) {
-        fetchDocuments()
+        fetchDocumentsRef.current()
       }
     } catch (err) {
       console.error(err)
@@ -163,8 +217,8 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
       if (!res.ok) throw new Error("Download unauthorized")
       const { downloadUrl } = await res.json()
       window.open(downloadUrl, "_blank")
-    } catch (err: any) {
-      alert(err.message)
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -182,15 +236,15 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
         throw new Error(errData.error || "Failed to add compliance item")
       }
       setCompForm({ type: "GST", dueDate: "", notes: "" })
-      fetchCompliance()
-    } catch (err: any) {
-      alert(err.message)
+      fetchComplianceRef.current()
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err))
     }
   }
 
   const handleStatusChange = async (itemId: string, newStatus: string) => {
     try {
-      const updatePayload: any = { status: newStatus }
+      const updatePayload: { status: string; filedDate?: string | null } = { status: newStatus }
       if (newStatus === "FILED" || newStatus === "ACKNOWLEDGED") {
         updatePayload.filedDate = new Date().toISOString()
       } else {
@@ -208,9 +262,9 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
         throw new Error(errData.error || "Status update failed")
       }
 
-      fetchCompliance()
-    } catch (err: any) {
-      alert(err.message)
+      fetchComplianceRef.current()
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -246,7 +300,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
           </div>
           <div className="flex gap-3 items-center">
             <span className="text-muted-foreground text-sm font-medium">{client.type}</span>
-            <Badge variant={getStatusVariant(client.status) as any}>
+            <Badge variant={getStatusVariant(client.status) as "default" | "secondary" | "destructive" | "outline"}>
               {client.status}
             </Badge>
           </div>
@@ -310,7 +364,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
                 <p className="text-sm text-muted-foreground">No staff assigned.</p>
               ) : (
                 <ul className="space-y-2">
-                  {client.assignedTo?.map((u: any) => (
+                  {client.assignedTo?.map((u) => (
                     <li key={u.id} className="flex justify-between text-sm">
                       <span className="font-medium">{u.name}</span>
                       <span className="text-muted-foreground">{u.role}</span>
@@ -326,7 +380,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
                 <p className="text-sm text-muted-foreground">No active services.</p>
               ) : (
                 <ul className="space-y-2">
-                  {client.services?.map((sub: any) => (
+                  {client.services?.map((sub) => (
                     <li key={sub.id} className="text-sm font-medium">
                       {sub.service.name}
                     </li>
@@ -403,7 +457,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {documents.map((doc: any) => (
+                  {documents.map((doc) => (
                     <TableRow key={doc.id}>
                       <TableCell className="font-medium">
                         <div className="truncate max-w-[150px] sm:max-w-[250px] md:max-w-[300px]" title={doc.fileName}>
@@ -497,7 +551,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {complianceItems.map((item: any) => (
+                  {complianceItems.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-semibold">{item.type}</TableCell>
                       <TableCell>{new Date(item.dueDate).toLocaleDateString()}</TableCell>
@@ -556,7 +610,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
             </div>
           ) : (
             <div className="divide-y divide-border/30 bg-card/20">
-              {tasks.map((task: any) => (
+              {tasks.map((task) => (
                 <div key={task.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-6 gap-4 hover:bg-muted/30 transition-colors group">
                   <div className="flex items-start gap-4">
                     <div className="mt-0.5 rounded-2xl p-3 bg-background shadow-sm border border-border/50 text-primary group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300">
@@ -582,7 +636,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
                   </div>
                   
                   <div className="flex items-center sm:justify-end">
-                    <Badge variant={getStatusVariant(task.status) as any} className="shadow-sm px-3 py-1 text-xs">
+                    <Badge variant={getStatusVariant(task.status) as "default" | "secondary" | "destructive" | "outline"} className="shadow-sm px-3 py-1 text-xs">
                       {task.status}
                     </Badge>
                   </div>

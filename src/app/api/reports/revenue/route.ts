@@ -20,12 +20,13 @@ export async function GET(req: NextRequest) {
     const data = await getRevenueReportData(userId, userRole, startDate, endDate, clientId);
     
     return NextResponse.json(data);
-  } catch (error: any) {
-    if (error.message && error.message.startsWith("FORBIDDEN:")) {
-      return NextResponse.json({ error: error.message }, { status: 403 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message && message.startsWith("FORBIDDEN:")) {
+      return NextResponse.json({ error: message }, { status: 403 });
     }
-    if (error.message === "Invalid date format" || error.message.includes("date range") || error.message.includes("before startDate")) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    if (message === "Invalid date format" || message.includes("date range") || message.includes("before startDate")) {
+      return NextResponse.json({ error: message }, { status: 400 });
     }
     console.error("Revenue report error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

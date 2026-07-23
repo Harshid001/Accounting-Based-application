@@ -10,7 +10,7 @@ export default async function ClientPortalOverview() {
     redirect("/login")
   }
 
-  const clientId = (session.user as any).clientId
+  const clientId = session.user.clientId
   if (!clientId) {
     return <div className="p-8 text-center text-muted-foreground">No client account associated.</div>
   }
@@ -72,7 +72,7 @@ export default async function ClientPortalOverview() {
       {outstandingTotal === 0 && complianceItems.length === 0 && (
         <div className="flex flex-col items-center justify-center p-12 text-center rounded-2xl border bg-primary/5">
           <CheckCircle className="w-12 h-12 text-primary mb-4" />
-          <h3 className="text-xl font-bold">You're all caught up!</h3>
+          <h3 className="text-xl font-bold">You&apos;re all caught up!</h3>
           <p className="text-muted-foreground mt-2">No pending invoices or compliance actions needed.</p>
         </div>
       )}

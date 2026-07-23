@@ -116,7 +116,7 @@ export default function ClientsPage() {
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground/90">Clients</h1>
-          <p className="text-sm text-muted-foreground">Manage your firm's client portfolio.</p>
+          <p className="text-sm text-muted-foreground">Manage your firm&apos;s client portfolio.</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="relative flex-1 sm:w-64">
@@ -158,7 +158,7 @@ export default function ClientsPage() {
                       </div>
                       <span className="text-xs font-medium text-muted-foreground">{client.type}</span>
                     </div>
-                    <Badge variant={getStatusVariant(client.status) as any} className="shrink-0">
+                    <Badge variant={getStatusVariant(client.status) as "default" | "secondary" | "destructive" | "success" | "warning" | "outline"} className="shrink-0">
                       {client.status}
                     </Badge>
                   </div>
@@ -233,7 +233,7 @@ export default function ClientsPage() {
                       </TableCell>
                       <TableCell>{client.type}</TableCell>
                       <TableCell>
-                        <Badge variant={getStatusVariant(client.status) as any}>
+                        <Badge variant={getStatusVariant(client.status) as "default" | "secondary" | "destructive" | "success" | "warning" | "outline"}>
                           {client.status}
                         </Badge>
                       </TableCell>

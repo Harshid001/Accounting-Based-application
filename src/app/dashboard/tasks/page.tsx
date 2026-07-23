@@ -12,7 +12,7 @@
  *   GET   /api/users?role=STAFF   -> { id, name }[]         (assignee pickers)
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import {
   Table,
@@ -94,32 +94,38 @@ export function TaskDashboard() {
   const [createOpen, setCreateOpen] = useState(false);
   const [reassignTaskId, setReassignTaskId] = useState<string | null>(null);
 
-  const loadTasks = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/tasks");
-      if (!res.ok) throw new Error();
-      const _taskData = await res.json();
-      setTasks(_taskData.data || _taskData);
-    } catch {
-      setError("Couldn't load tasks. Try refreshing.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadTasksRef = useRef<() => void>(() => {});
 
   useEffect(() => {
-    loadTasks();
+    let cancelled = false;
+    const loadTasks = async () => {
+      if (!cancelled) {
+        setLoading(true);
+        setError(null);
+      }
+      try {
+        const res = await fetch("/api/tasks");
+        if (!res.ok) throw new Error();
+        const _taskData = await res.json();
+        if (!cancelled) setTasks(_taskData.data || _taskData);
+      } catch {
+        if (!cancelled) setError("Couldn't load tasks. Try refreshing.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    loadTasksRef.current = loadTasks;
+    loadTasksRef.current();
     if (role && canCreateTask(role)) {
       fetch("/api/clients")
         .then((r) => (r.ok ? r.json() : { data: [] }))
-        .then((res) => setClients(res.data || []));
+        .then((res) => { if (!cancelled) setClients(res.data || []); });
       fetch("/api/users?role=STAFF")
         .then((r) => (r.ok ? r.json() : { data: [] }))
-        .then((res) => setStaff(res.data || []));
+        .then((res) => { if (!cancelled) setStaff(res.data || []); });
     }
-  }, [loadTasks, role]);
+    return () => { cancelled = true };
+  }, [role]);
 
   async function updateStatus(taskId: string, status: TaskStatus) {
     await fetch(`/api/tasks/${taskId}`, {
@@ -127,7 +133,7 @@ export function TaskDashboard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
-    loadTasks();
+    loadTasksRef.current();
   }
 
   async function reassign(taskId: string, assignedToId: string) {
@@ -137,7 +143,7 @@ export function TaskDashboard() {
       body: JSON.stringify({ assignedToId }),
     });
     setReassignTaskId(null);
-    loadTasks();
+    loadTasksRef.current();
   }
 
   async function createTask(form: FormData) {
@@ -152,7 +158,7 @@ export function TaskDashboard() {
       }),
     });
     setCreateOpen(false);
-    loadTasks();
+    loadTasksRef.current();
   }
 
   const visibleTasks =
@@ -264,7 +270,7 @@ export function TaskDashboard() {
       ) : error ? (
         <div className="flex flex-col items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <span>{error}</span>
-          <Button size="sm" variant="outline" onClick={loadTasks}>
+          <Button size="sm" variant="outline" onClick={() => loadTasksRef.current()}>
             Retry
           </Button>
         </div>

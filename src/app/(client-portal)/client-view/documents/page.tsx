@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -8,33 +8,42 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Download, Upload, Loader2, Archive } from "lucide-react"
 
+interface ClientDocument {
+  id: string
+  fileName: string
+  type: string
+}
+
 export default function ClientDocumentsPage() {
   const { data: session } = useSession()
-  const clientId = (session?.user as any)?.clientId
+  const clientId = session?.user?.clientId
 
-  const [documents, setDocuments] = useState<any[]>([])
+  const [documents, setDocuments] = useState<ClientDocument[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState("")
   const [docForm, setDocForm] = useState({ type: "BANK_STATEMENT" })
 
-  useEffect(() => {
-    if (clientId) {
-      fetchDocuments()
-    }
-  }, [clientId])
+  const fetchDocumentsRef = useRef<() => void>(() => {})
 
-  const fetchDocuments = async () => {
-    try {
-      const res = await fetch(`/api/clients/${clientId}/documents`)
-      if (res.ok) {
-        const _resData = await res.json()
+  useEffect(() => {
+    if (!clientId) return
+    let cancelled = false
+    const doFetch = async () => {
+      try {
+        const res = await fetch(`/api/clients/${clientId}/documents`)
+        if (res.ok) {
+          const _resData = await res.json()
           const data = _resData.data || _resData
-        setDocuments(data)
+          if (!cancelled) setDocuments(data)
+        }
+      } catch (err) {
+        console.error(err)
       }
-    } catch (err) {
-      console.error(err)
     }
-  }
+    fetchDocumentsRef.current = doFetch
+    doFetch()
+    return () => { cancelled = true }
+  }, [clientId])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return
@@ -74,9 +83,9 @@ export default function ClientDocumentsPage() {
         }
       }
 
-      fetchDocuments()
-    } catch (err: any) {
-      setUploadError(err.message)
+      fetchDocumentsRef.current()
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : String(err))
     } finally {
       setUploading(false)
       e.target.value = ""
@@ -89,8 +98,8 @@ export default function ClientDocumentsPage() {
       if (!res.ok) throw new Error("Download unauthorized")
       const { downloadUrl } = await res.json()
       window.open(downloadUrl, "_blank")
-    } catch (err: any) {
-      alert(err.message)
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -102,7 +111,7 @@ export default function ClientDocumentsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ archived: true })
       })
-      if (res.ok) fetchDocuments()
+      if (res.ok) fetchDocumentsRef.current()
     } catch (err) {
       console.error(err)
     }
@@ -177,7 +186,7 @@ export default function ClientDocumentsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {documents.map((doc: any) => (
+                {documents.map((doc) => (
                   <TableRow key={doc.id}>
                     <TableCell className="font-medium">
                       <div className="truncate max-w-[200px]" title={doc.fileName}>

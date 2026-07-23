@@ -57,8 +57,9 @@ export async function POST(req: Request) {
 
         activated = true;
       });
-    } catch (txErr: any) {
-      if (txErr.message === "TOKEN_ALREADY_USED") {
+    } catch (txErr: unknown) {
+      const txMessage = txErr instanceof Error ? txErr.message : String(txErr);
+      if (txMessage === "TOKEN_ALREADY_USED") {
         return new NextResponse("Token has already been used", { status: 400 });
       }
       throw txErr; // Re-throw anything else (DB blip, etc.) to the outer handler.

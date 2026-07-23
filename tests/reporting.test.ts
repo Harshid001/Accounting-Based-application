@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Client, type User } from "@prisma/client";
+import type { NextRequest } from "next/server";
 import { clearDatabase, setMockSession, clearMockSession } from "./setup";
 import { getRevenueReportData } from "../src/lib/reports";
 import { GET as exportReport } from "../src/app/api/reports/export/route";
@@ -7,10 +8,10 @@ import { GET as exportReport } from "../src/app/api/reports/export/route";
 const prisma = new PrismaClient();
 
 describe("Reporting API", () => {
-  let client1: any;
-  let client2: any;
-  let admin: any;
-  let accountant: any;
+  let client1: Client;
+  let client2: Client;
+  let admin: User;
+  let accountant: User;
 
   beforeAll(async () => {
     await clearDatabase();
@@ -88,7 +89,7 @@ describe("Reporting API", () => {
     const mockReq = { 
       url: "http://localhost:3000/api/reports/export?format=pdf&type=revenue",
       headers: new Headers({})
-    } as any;
+    } as unknown as NextRequest;
     const res = await exportReport(mockReq);
     expect(res.status).toBe(401);
   });
@@ -98,7 +99,7 @@ describe("Reporting API", () => {
     const mockReq = { 
       url: "http://localhost:3000/api/reports/export?format=pdf&type=revenue",
       headers: new Headers({})
-    } as any;
+    } as unknown as NextRequest;
     
     const res = await exportReport(mockReq);
     expect(res.status).toBe(200);

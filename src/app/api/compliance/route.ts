@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { ROLES } from "@/lib/permissions"
-import { ComplianceType, ComplianceStatus } from "@prisma/client"
+import { ComplianceType, ComplianceStatus, Prisma } from "@prisma/client"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
 
     const { role, id: userId } = session.user
 
-    let whereClause: any = {}
+    const whereClause: Prisma.ComplianceItemWhereInput = {}
 
     // 1. Scoping by User Role
     if (role !== ROLES.ADMIN) {

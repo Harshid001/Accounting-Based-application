@@ -92,7 +92,7 @@ export const GET = withAuth(async (req: NextRequest, { user, prisma }) => {
     }
   }
 
-  let where = buildCommentWhereClause(userRole, userId, filters.parentType, filters.parentId);
+  const where = buildCommentWhereClause(userRole, userId, filters.parentType, filters.parentId);
 
   if (
     userRole === ROLES.ACCOUNTANT ||
@@ -136,7 +136,7 @@ export const POST = withAuth(async (req: NextRequest, { user, prisma }) => {
     validMentions = await validateMentions(mentions, parentType, parentId);
   }
 
-  const createData: Record<string, any> = {
+  const createData: Record<string, unknown> = {
     content,
     authorId: userId,
     mentions: validMentions,
@@ -163,7 +163,7 @@ export const POST = withAuth(async (req: NextRequest, { user, prisma }) => {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    const comment = await tx.comment.create({ data: createData as any });
+    const comment = await tx.comment.create({ data: createData as Prisma.CommentCreateInput });
 
     await tx.auditLog.create({
       data: {

@@ -1,7 +1,6 @@
 const { app, BrowserWindow } = require('electron');
 const { createServer } = require('http');
 const next = require('next');
-const path = require('path');
 
 const dev = !app.isPackaged;
 const dir = app.getAppPath();

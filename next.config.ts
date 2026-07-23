@@ -30,7 +30,6 @@ const nextConfig: NextConfig = {
   },
   /* config options here */
   turbopack: {},
-  // @ts-ignore - Next.js internal/undocumented flag for dev origins
   allowedDevOrigins: ['10.0.2.2', 'localhost', '192.168.1.147', '192.168.1.191', '127.0.0.1'],
 };
 

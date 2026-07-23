@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -10,13 +10,27 @@ import { Loader2, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
+interface ComplianceListItem {
+  id: string
+  type: string
+  status: string
+  dueDate: string
+  notes: string | null
+  client: { name: string }
+}
+
+interface ComplianceClient {
+  id: string
+  name: string
+}
+
 export default function GlobalCompliancePage() {
   const { data: session } = useSession()
-  const [items, setItems] = useState<any[]>([])
+  const [items, setItems] = useState<ComplianceListItem[]>([])
   const [loading, setLoading] = useState(true)
-  
+
   // New Filing state
-  const [clientsList, setClientsList] = useState<any[]>([])
+  const [clientsList, setClientsList] = useState<ComplianceClient[]>([])
   const [isNewModalOpen, setIsNewModalOpen] = useState(false)
   const [newFilingClient, setNewFilingClient] = useState("")
   const [newFilingType, setNewFilingType] = useState("")
@@ -30,52 +44,57 @@ export default function GlobalCompliancePage() {
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
 
-  const fetchGlobalCompliance = async () => {
-    setLoading(true)
-    try {
-      const queryParams = new URLSearchParams()
-      if (typeFilter && typeFilter !== "all") queryParams.append("type", typeFilter)
-      if (statusFilter && statusFilter !== "all") queryParams.append("status", statusFilter)
-      if (startDate) queryParams.append("startDate", startDate)
-      if (endDate) queryParams.append("endDate", endDate)
-
-      const res = await fetch(`/api/compliance?${queryParams.toString()}`)
-      if (res.ok) {
-        const _resData = await res.json()
-          const data = _resData.data || _resData
-        setItems(data)
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchAvailableClients = async () => {
-    try {
-      const res = await fetch("/api/clients")
-      if (res.ok) {
-        const _resData = await res.json()
-          const data = _resData.data || _resData
-        setClientsList(data)
-      }
-    } catch (err) {
-      console.error(err)
-    }
-  }
+  const fetchGlobalComplianceRef = useRef<(showLoading?: boolean) => void>(() => {})
 
   useEffect(() => {
-    fetchGlobalCompliance()
+    let cancelled = false
+    const doFetch = async (showLoading = true) => {
+      if (showLoading && !cancelled) setLoading(true)
+      try {
+        const queryParams = new URLSearchParams()
+        if (typeFilter && typeFilter !== "all") queryParams.append("type", typeFilter)
+        if (statusFilter && statusFilter !== "all") queryParams.append("status", statusFilter)
+        if (startDate) queryParams.append("startDate", startDate)
+        if (endDate) queryParams.append("endDate", endDate)
+
+        const res = await fetch(`/api/compliance?${queryParams.toString()}`)
+        if (res.ok) {
+          const _resData = await res.json()
+          const data = _resData.data || _resData
+          if (!cancelled) setItems(data)
+        }
+      } catch (err) {
+        console.error(err)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchGlobalComplianceRef.current = doFetch
+    doFetch()
+    return () => { cancelled = true }
   }, [typeFilter, statusFilter, startDate, endDate])
 
   useEffect(() => {
-    fetchAvailableClients()
+    let cancelled = false
+    const doFetch = async () => {
+      try {
+        const res = await fetch("/api/clients")
+        if (res.ok) {
+          const _resData = await res.json()
+          const data = _resData.data || _resData
+          if (!cancelled) setClientsList(data)
+        }
+      } catch (err) {
+        console.error(err)
+      }
+    }
+    doFetch()
+    return () => { cancelled = true }
   }, [])
 
   const handleStatusChange = async (itemId: string, newStatus: string) => {
     try {
-      const updatePayload: any = { status: newStatus }
+      const updatePayload: { status: string; filedDate?: string | null } = { status: newStatus }
       if (newStatus === "FILED" || newStatus === "ACKNOWLEDGED") {
         updatePayload.filedDate = new Date().toISOString()
       } else {
@@ -93,9 +112,9 @@ export default function GlobalCompliancePage() {
         throw new Error(errData.error || "Status update failed")
       }
 
-      fetchGlobalCompliance()
-    } catch (err: any) {
-      alert(err.message)
+      fetchGlobalComplianceRef.current()
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -131,9 +150,9 @@ export default function GlobalCompliancePage() {
       setNewFilingType("")
       setNewFilingDate("")
       setNewFilingNotes("")
-      fetchGlobalCompliance()
-    } catch (err: any) {
-      alert(err.message)
+      fetchGlobalComplianceRef.current()
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err))
     } finally {
       setIsSubmitting(false)
     }

@@ -6,7 +6,7 @@ import { CreditCard, Loader2 } from "lucide-react"
 
 declare global {
   interface Window {
-    Razorpay: any
+    Razorpay: new (options: unknown) => { on: (event: string, handler: (response: unknown) => void) => void; open: () => void }
   }
 }
 
@@ -49,7 +49,7 @@ export function PayButton({ invoiceId, amount }: { invoiceId: string, amount: nu
         name: "Accounting Business App",
         description: `Payment for Invoice`,
         order_id: orderId,
-        handler: async function (response: any) {
+        handler: async function (response: { razorpay_payment_id?: string }) {
           // This is a client-side success handler. 
           // The real source of truth is the webhook, but we can do a UI refresh here.
           alert("Payment successful! It may take a moment to reflect on your account.")
@@ -65,14 +65,14 @@ export function PayButton({ invoiceId, amount }: { invoiceId: string, amount: nu
 
       const rzp = new window.Razorpay(options)
       
-      rzp.on('payment.failed', function (response: any){
+      rzp.on('payment.failed', function (response: { error: { description?: string } }){
         alert("Payment failed: " + response.error.description);
         // The webhook handles the 'payment.failed' event to update PaymentIntent status to FAILED.
       });
 
       rzp.open()
-    } catch (err: any) {
-      alert(err.message)
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
     }

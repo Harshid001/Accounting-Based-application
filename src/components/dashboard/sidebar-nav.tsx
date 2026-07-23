@@ -10,8 +10,9 @@ import {
   FileText,
   ShieldCheck,
   UserCog,
+  Briefcase,
 } from "lucide-react"
-import { canManageUsers, type Role } from "@/lib/permissions"
+import { canManageUsers, isStaffLeadership, type Role } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 
 const NAV_ITEMS = [
@@ -75,17 +76,25 @@ export function SidebarNav() {
         <NavLink key={item.href} {...item} active={pathname === item.href} />
       ))}
 
-      {role && canManageUsers(role) && (
+      {role && isStaffLeadership(role) && (
         <>
           <div className="my-4 border-t border-border/50" />
           <div className="mb-4 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Admin
           </div>
+          {canManageUsers(role) && (
+            <NavLink
+              href="/dashboard/users"
+              label="Users"
+              icon={UserCog}
+              active={pathname === "/dashboard/users"}
+            />
+          )}
           <NavLink
-            href="/dashboard/users"
-            label="Users"
-            icon={UserCog}
-            active={pathname === "/dashboard/users"}
+            href="/dashboard/admin/clients"
+            label="Clients"
+            icon={Briefcase}
+            active={pathname === "/dashboard/admin/clients"}
           />
         </>
       )}

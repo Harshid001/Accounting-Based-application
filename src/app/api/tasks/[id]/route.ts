@@ -36,7 +36,7 @@ export const PATCH = withAuth(async (req: NextRequest, { user, prisma }) => {
   const body = await req.json();
   const validated = validateBody(body, updateTaskSchema);
 
-  const updates: Record<string, any> = {};
+  const updates: Record<string, unknown> = {};
 
   if (validated.status !== undefined) {
     updates.status = validated.status;
@@ -73,7 +73,7 @@ export const PATCH = withAuth(async (req: NextRequest, { user, prisma }) => {
   const updatedTask = await prisma.$transaction(async (tx) => {
     const taskRes = await tx.task.update({
       where: { id },
-      data: updates,
+      data: updates as Prisma.TaskUpdateInput,
     });
 
     const auditLogs: Prisma.AuditLogCreateManyInput[] = [];
@@ -98,7 +98,7 @@ export const PATCH = withAuth(async (req: NextRequest, { user, prisma }) => {
       });
     }
 
-    const genericUpdates: Record<string, any> = {};
+    const genericUpdates: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(updates)) {
       if (k !== "assignedToId" && k !== "status") {
         genericUpdates[k] = v;

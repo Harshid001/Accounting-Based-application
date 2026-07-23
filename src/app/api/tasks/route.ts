@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { ROLES } from "@/lib/permissions";
 import { withAuth, validateBody } from "@/lib/api/withAuth";
 import { createTaskSchema, taskFiltersSchema } from "@/lib/api/validators";
@@ -32,11 +33,11 @@ export const GET = withAuth(async (req: NextRequest, { user, prisma }) => {
   const userRole = user.role as Role;
   const scope = taskScopeWhere(user);
 
-  const whereClause: Record<string, any> = { AND: [] };
-  if (scope) whereClause.AND.push(scope);
-  if (filters.clientId) whereClause.AND.push({ clientId: filters.clientId });
-  if (filters.status) whereClause.AND.push({ status: filters.status });
-  if (whereClause.AND.length === 0) delete whereClause.AND;
+  const whereClause: Prisma.TaskWhereInput & { AND?: Prisma.TaskWhereInput[] } = { AND: [] };
+  if (scope) whereClause.AND!.push(scope);
+  if (filters.clientId) whereClause.AND!.push({ clientId: filters.clientId });
+  if (filters.status) whereClause.AND!.push({ status: filters.status });
+  if (whereClause.AND!.length === 0) delete whereClause.AND;
 
   const [tasks, total] = await Promise.all([
     prisma.task.findMany({

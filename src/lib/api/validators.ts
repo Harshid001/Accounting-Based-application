@@ -13,7 +13,9 @@ export const createClientSchema = z.object({
   assignedToIds: z.array(z.string().cuid()).optional(),
 });
 
-export const updateClientSchema = createClientSchema.partial();
+export const updateClientSchema = createClientSchema.partial().extend({
+  isPinned: z.boolean().optional(),
+});
 
 export const createTaskSchema = z.object({
   title: z.string().min(1, "Title is required").max(255),

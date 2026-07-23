@@ -58,12 +58,11 @@ export async function validateReportParams(userId: string, role: string, startDa
 export async function getRevenueReportData(userId: string, role: string, startDate?: string, endDate?: string, clientId?: string) {
   // Check cache first — key includes all scoping params
   const cacheKey = `report:revenue:${userId}:${role}:${startDate || ""}:${endDate || ""}:${clientId || ""}`;
-  const cached = await appCache.get<any>(cacheKey);
+  const cached = await appCache.get<{ period: { start: Date; end: Date }; metrics: { totalBilled: string; totalCollected: string; outstandingBalance: string } }>(cacheKey);
   if (cached) return cached;
 
   const { start, end, clientIdsFilter } = await validateReportParams(userId, role, startDate, endDate, clientId);
 
-  // Get Invoice totals
   const invoiceWhere: Prisma.InvoiceWhereInput = {
     issueDate: { gte: start, lte: end },
     ...(clientIdsFilter ? { clientId: { in: clientIdsFilter } } : {})
@@ -117,7 +116,7 @@ export async function getRevenueReportData(userId: string, role: string, startDa
 export async function getComplianceReportData(userId: string, role: string, startDate?: string, endDate?: string, clientId?: string) {
   // Check cache first
   const cacheKey = `report:compliance:${userId}:${role}:${startDate || ""}:${endDate || ""}:${clientId || ""}`;
-  const cached = await appCache.get<any>(cacheKey);
+  const cached = await appCache.get<{ period: { start: Date; end: Date }; metrics: { statusBreakdown: unknown; typeBreakdown: unknown; overdueCount: number } }>(cacheKey);
   if (cached) return cached;
 
   const { start, end, clientIdsFilter } = await validateReportParams(userId, role, startDate, endDate, clientId);

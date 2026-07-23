@@ -59,10 +59,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    let { id: clientId } = await params
+    let clientId: string | undefined = (await params).id;
 
     if (session.user.role === 'CLIENT') {
-      clientId = (session.user as any).clientId; // Enforce their own ID
+      clientId = session.user.clientId ?? undefined; // Enforce their own ID
       if (!clientId) {
         return NextResponse.json({ error: "Forbidden: No client associated" }, { status: 403 })
       }
@@ -122,8 +122,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const uploadUrl = await getUploadUrl(fileKey, fileType)
 
     return NextResponse.json({ document, uploadUrl })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error initiating upload:", error)
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 })
+    const message = error instanceof Error ? error.message : String(error)
+    return NextResponse.json({ error: message || "Internal Server Error" }, { status: 500 })
   }
 }

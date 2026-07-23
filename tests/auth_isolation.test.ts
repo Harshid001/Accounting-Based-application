@@ -7,7 +7,8 @@
  * - A CLIENT cannot call POST /api/invoices at all
  */
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Client, type User, type Invoice } from "@prisma/client";
+import type { NextRequest } from "next/server";
 import { clearDatabase, setMockSession, clearMockSession } from "./setup";
 import { POST as createInvoice, GET as listInvoices } from "../src/app/api/invoices/route";
 import { GET as getInvoice } from "../src/app/api/invoices/[id]/route";
@@ -15,16 +16,18 @@ import { POST as createPayment } from "../src/app/api/invoices/[id]/payments/rou
 
 const prisma = new PrismaClient();
 
+type IdParams = { params: Promise<{ id: string }> };
+
 describe("Authorization Isolation (authentication ≠ authorization)", () => {
-  let clientA: any;
-  let clientB: any;
-  let clientAUser: any;     // CLIENT role linked to clientA
-  let clientBUser: any;     // CLIENT role linked to clientB
-  let accountantA: any;     // ACCOUNTANT assigned to clientA only
-  let dataEntryUser: any;   // DATA_ENTRY — no invoice/payment rights
-  let adminUser: any;
-  let invoiceA: any;        // Invoice belonging to clientA
-  let invoiceB: any;        // Invoice belonging to clientB
+  let clientA: Client;
+  let clientB: Client;
+  let clientAUser: User;     // CLIENT role linked to clientA
+  let clientBUser: User;     // CLIENT role linked to clientB
+  let accountantA: User;     // ACCOUNTANT assigned to clientA only
+  let dataEntryUser: User;   // DATA_ENTRY — no invoice/payment rights
+  let adminUser: User;
+  let invoiceA: Invoice;        // Invoice belonging to clientA
+  let invoiceB: Invoice;        // Invoice belonging to clientB
 
   beforeAll(async () => {
     await clearDatabase();
@@ -58,14 +61,14 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
     const resA = await createInvoice({
       json: async () => ({ clientId: clientA.id, dueDate: new Date(Date.now() + 864e5).toISOString(), lineItems }),
       headers: new Headers({})
-    } as any);
+    } as unknown as NextRequest);
     invoiceA = await resA.json();
 
     // Create invoice for clientB (as admin)
     const resB = await createInvoice({
       json: async () => ({ clientId: clientB.id, dueDate: new Date(Date.now() + 864e5).toISOString(), lineItems }),
       headers: new Headers({})
-    } as any);
+    } as unknown as NextRequest);
     invoiceB = await resB.json();
   }, 30000);
 
@@ -80,16 +83,16 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
 
   it("CLIENT A cannot fetch CLIENT B's invoice by ID → 403", async () => {
     setMockSession({ user: { id: clientAUser.id, role: "CLIENT", clientId: clientA.id } });
-    const res = await getInvoice({} as any, { params: Promise.resolve({ id: invoiceB.id }) } as any);
+    const res = await getInvoice({} as unknown as NextRequest, { params: Promise.resolve({ id: invoiceB.id }) } as unknown as IdParams);
     expect(res.status).toBe(403);
   });
 
   it("CLIENT A cannot see CLIENT B's invoice in list (scoped to own clientId)", async () => {
     setMockSession({ user: { id: clientAUser.id, role: "CLIENT", clientId: clientA.id } });
-    const res = await listInvoices({ url: "http://localhost/api/invoices" } as any);
+    const res = await listInvoices({ url: "http://localhost/api/invoices" } as unknown as NextRequest);
     expect(res.status).toBe(200);
     const { data: invoices } = await res.json();
-    const ids = invoices.map((i: any) => i.id);
+    const ids = invoices.map((i: { id: string }) => i.id);
     expect(ids).toContain(invoiceA.id);
     expect(ids).not.toContain(invoiceB.id);
   });
@@ -99,7 +102,7 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
     const res = await createInvoice({
       json: async () => ({ clientId: clientA.id, dueDate: new Date().toISOString(), lineItems: [{ description: "x", quantity: 1, unitPrice: 100, taxRate: 0 }] }),
       headers: new Headers({})
-    } as any);
+    } as unknown as NextRequest);
     expect(res.status).toBe(403);
   });
 
@@ -110,7 +113,7 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
     const res = await createComment({
       json: async () => ({ content: "Sneaky comment", parentType: "invoice", parentId: invoiceB.id }),
       headers: new Headers({})
-    } as any);
+    } as unknown as NextRequest);
     expect(res.status).toBe(403);
   });
 
@@ -118,29 +121,29 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
 
   it("ACCOUNTANT assigned to A cannot fetch CLIENT B's invoice by ID → 403", async () => {
     setMockSession({ user: { id: accountantA.id, role: "ACCOUNTANT" } });
-    const res = await getInvoice({} as any, { params: Promise.resolve({ id: invoiceB.id }) } as any);
+    const res = await getInvoice({} as unknown as NextRequest, { params: Promise.resolve({ id: invoiceB.id }) } as unknown as IdParams);
     expect(res.status).toBe(403);
   });
 
   it("ACCOUNTANT assigned to A cannot see CLIENT B's invoice in list", async () => {
     setMockSession({ user: { id: accountantA.id, role: "ACCOUNTANT" } });
-    const res = await listInvoices({ url: "http://localhost/api/invoices" } as any);
+    const res = await listInvoices({ url: "http://localhost/api/invoices" } as unknown as NextRequest);
     expect(res.status).toBe(200);
     const { data: invoices } = await res.json();
-    const ids = invoices.map((i: any) => i.id);
+    const ids = invoices.map((i: { id: string }) => i.id);
     expect(ids).toContain(invoiceA.id);
     expect(ids).not.toContain(invoiceB.id);
   });
 
   it("ACCOUNTANT cannot request clientB invoices via ?clientId param → 403", async () => {
     setMockSession({ user: { id: accountantA.id, role: "ACCOUNTANT" } });
-    const res = await listInvoices({ url: `http://localhost/api/invoices?clientId=${clientB.id}` } as any);
+    const res = await listInvoices({ url: `http://localhost/api/invoices?clientId=${clientB.id}` } as unknown as NextRequest);
     expect(res.status).toBe(403);
   });
 
   it("ACCOUNTANT can fetch their own assigned client's invoice by ID → 200", async () => {
     setMockSession({ user: { id: accountantA.id, role: "ACCOUNTANT" } });
-    const res = await getInvoice({} as any, { params: Promise.resolve({ id: invoiceA.id }) } as any);
+    const res = await getInvoice({} as unknown as NextRequest, { params: Promise.resolve({ id: invoiceA.id }) } as unknown as IdParams);
     expect(res.status).toBe(200);
   });
 
@@ -149,8 +152,8 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
   it("DATA_ENTRY cannot record payment → 403", async () => {
     setMockSession({ user: { id: dataEntryUser.id, role: "DATA_ENTRY" } });
     const res = await createPayment(
-      { json: async () => ({ amount: 100, method: "CASH" }), headers: new Headers({}) } as any,
-      { params: Promise.resolve({ id: invoiceA.id }) } as any
+      { json: async () => ({ amount: 100, method: "CASH" }), headers: new Headers({}) } as unknown as NextRequest,
+      { params: Promise.resolve({ id: invoiceA.id }) } as unknown as IdParams
     );
     expect(res.status).toBe(403);
   });
@@ -160,7 +163,7 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
     const res = await createInvoice({
       json: async () => ({ clientId: clientA.id, dueDate: new Date().toISOString(), lineItems: [{ description: "x", quantity: 1, unitPrice: 100, taxRate: 0 }] }),
       headers: new Headers({})
-    } as any);
+    } as unknown as NextRequest);
     expect(res.status).toBe(403);
   });
 
@@ -168,10 +171,10 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
 
   it("ADMIN can see all invoices in list", async () => {
     setMockSession({ user: { id: adminUser.id, role: "ADMIN" } });
-    const res = await listInvoices({ url: "http://localhost/api/invoices" } as any);
+    const res = await listInvoices({ url: "http://localhost/api/invoices" } as unknown as NextRequest);
     expect(res.status).toBe(200);
     const { data: invoices } = await res.json();
-    const ids = invoices.map((i: any) => i.id);
+    const ids = invoices.map((i: { id: string }) => i.id);
     expect(ids).toContain(invoiceA.id);
     expect(ids).toContain(invoiceB.id);
   });

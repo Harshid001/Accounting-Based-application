@@ -23,7 +23,6 @@ function checkClientAccess(role: Role, userId: string, clientId: string) {
 }
 
 export const GET = withAuth(async (req: NextRequest, { user }) => {
-  console.log('GET /api/clients - user:', { id: user.id, role: user.role, email: user.email });
   const userRole = user.role as Role;
   const userId = user.id;
   const { searchParams } = new URL(req.url);
@@ -34,7 +33,6 @@ export const GET = withAuth(async (req: NextRequest, { user }) => {
   });
 
   const whereClause = buildClientWhereClause(userRole, userId);
-  console.log('whereClause:', JSON.stringify(whereClause));
 
   const [clients, total] = await Promise.all([
     prisma.client.findMany({

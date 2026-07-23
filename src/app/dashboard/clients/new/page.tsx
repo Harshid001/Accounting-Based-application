@@ -51,8 +51,8 @@ export default function NewClientPage() {
 
       router.push("/dashboard/clients")
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
       setLoading(false)
     }
   }

@@ -9,7 +9,7 @@ export default async function ClientCommentsPage() {
     redirect("/login")
   }
 
-  const clientId = (session.user as any).clientId
+  const clientId = session.user.clientId
   if (!clientId) {
     return <div className="p-8 text-center text-muted-foreground">No client account associated.</div>
   }

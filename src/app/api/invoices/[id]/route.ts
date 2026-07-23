@@ -38,7 +38,7 @@ export async function GET(
 
     // CLIENT: only their own client's invoices — strip internal staff data
     if (role === "CLIENT") {
-      const userClientId = (session.user as any).clientId;
+      const userClientId = session.user.clientId;
       if (!userClientId || invoice.clientId !== userClientId) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }

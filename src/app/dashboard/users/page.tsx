@@ -33,39 +33,42 @@ export default function UsersPage() {
   
   const isAdmin = session?.user?.role === "ADMIN"
 
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch("/api/users")
-      if (res.ok) {
-        const _resData = await res.json()
-          const data = _resData.data || _resData
-        setUsers(data)
-      } else {
-        setError("Failed to fetch users")
-      }
-    } catch (err) {
-      setError("An error occurred while fetching users.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchClients = async () => {
-    try {
-      const res = await fetch("/api/clients")
-      if (res.ok) {
-        const _resData = await res.json()
-          const data = _resData.data || _resData
-        setClients(data)
-      }
-    } catch (err) {
-      // Silently fail - client linking just won't be available
-    }
-  }
-
   useEffect(() => {
+    let cancelled = false
+
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch("/api/users")
+        if (res.ok) {
+          const _resData = await res.json()
+          const data = _resData.data || _resData
+          if (!cancelled) setUsers(data)
+        } else {
+          if (!cancelled) setError("Failed to fetch users")
+        }
+      } catch (err) {
+        if (!cancelled) setError("An error occurred while fetching users.")
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    const fetchClients = async () => {
+      try {
+        const res = await fetch("/api/clients")
+        if (res.ok) {
+          const _resData = await res.json()
+          const data = _resData.data || _resData
+          if (!cancelled) setClients(data)
+        }
+      } catch (err) {
+        // Silently fail - client linking just won't be available
+      }
+    }
+
     fetchUsers()
     fetchClients()
+    return () => { cancelled = true }
   }, [])
 
   const handleRoleChange = async (userId: string, newRole: string) => {

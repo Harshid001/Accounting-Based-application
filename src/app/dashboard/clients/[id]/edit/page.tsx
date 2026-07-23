@@ -48,7 +48,7 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
           tan: data.tan || "",
           address: data.address || "",
           status: data.status || "ACTIVE",
-          assignedToIds: data.assignedTo?.map((u: any) => u.id) || []
+          assignedToIds: data.assignedTo?.map((u: { id: string }) => u.id) || []
         })
       })
       .catch(err => setError(err.message))
@@ -75,8 +75,8 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
 
       router.push(`/dashboard/clients/${resolvedParams.id}`)
       router.refresh()
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
       setLoading(false)
     }
   }

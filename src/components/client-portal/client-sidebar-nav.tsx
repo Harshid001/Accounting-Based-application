@@ -7,7 +7,8 @@ import {
   FileText,
   ShieldCheck,
   CreditCard,
-  MessageSquare
+  MessageSquare,
+  type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -27,7 +28,7 @@ function NavLink({
 }: {
   href: string
   label: string
-  icon: any
+  icon: typeof LayoutDashboard
   active: boolean
 }) {
   return (

@@ -8,11 +8,31 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, ArrowLeft, CheckCircle2, User, Building, AlignLeft, Calendar } from 'lucide-react';
 
+interface TaskUser {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: string;
+}
+
+interface TaskClient {
+  id: string;
+  name: string;
+}
+
+interface TaskComplianceItem {
+  id: string;
+  clientId: string;
+  type: string;
+  status: string;
+  dueDate: string;
+}
+
 export default function NewTaskPage() {
   const router = useRouter();
-  const [users, setUsers] = useState<any[]>([]);
-  const [clients, setClients] = useState<any[]>([]);
-  const [complianceItems, setComplianceItems] = useState<any[]>([]);
+  const [users, setUsers] = useState<TaskUser[]>([]);
+  const [clients, setClients] = useState<TaskClient[]>([]);
+  const [complianceItems, setComplianceItems] = useState<TaskComplianceItem[]>([]);
   
   const [form, setForm] = useState({
     title: '',

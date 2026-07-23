@@ -95,19 +95,20 @@ export async function POST(
     });
 
     return NextResponse.json(result, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to process payment:", error);
-    if (error.message && error.message.startsWith("OVERPAYMENT:")) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message && message.startsWith("OVERPAYMENT:")) {
        // Return 400 with exact remaining balance info
-       const match = error.message.match(/Remaining balance is ([\d\.]+)/);
+       const match = message.match(/Remaining balance is ([\d\.]+)/);
        const remaining = match ? parseFloat(match[1]) : 0;
        return NextResponse.json({ 
-         error: error.message, 
-         remainingBalance: remaining 
+          error: message, 
+          remainingBalance: remaining 
        }, { status: 400 });
     }
-    if (error.message === "Invoice not found") return NextResponse.json({ error: error.message }, { status: 404 });
-    if (error.message === "Cannot pay a VOID invoice") return NextResponse.json({ error: error.message }, { status: 400 });
+    if (message === "Invoice not found") return NextResponse.json({ error: message }, { status: 404 });
+    if (message === "Cannot pay a VOID invoice") return NextResponse.json({ error: message }, { status: 400 });
     
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }

@@ -23,20 +23,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     // Role check: If CLIENT, must be their own invoice.
     if (session.user.role === "CLIENT") {
-      if (invoice.clientId !== (session.user as any).clientId) {
+      if (invoice.clientId !== session.user.clientId) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 })
       }
     }
 
     const stream = await generateInvoicePDF(invoice)
 
-    return new Response(stream as any, {
+    return new Response(stream as unknown as BodyInit, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `inline; filename="invoice-${invoice.invoiceNumber}.pdf"`,
       }
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("PDF Generation Error:", error)
     return NextResponse.json({ error: "Failed to generate PDF" }, { status: 500 })
   }
