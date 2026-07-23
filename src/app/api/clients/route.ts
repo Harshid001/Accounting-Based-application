@@ -11,7 +11,7 @@ import {
 type Role = typeof ROLES[keyof typeof ROLES];
 
 function buildClientWhereClause(role: Role, userId: string) {
-  if (role === ROLES.ADMIN) return {};
+  if (role === ROLES.ADMIN || role === ROLES.MANAGER) return {};
   return { assignedTo: { some: { id: userId } } };
 }
 

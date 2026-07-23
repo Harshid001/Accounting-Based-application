@@ -123,6 +123,12 @@ export const authOptions: NextAuthOptions = {
             }
           }
 
+          // Find an admin user to assign to this client (for staff visibility)
+          const adminUser = await prisma.user.findFirst({
+            where: { role: "ADMIN", isActive: true },
+            select: { id: true }
+          })
+
           const clientData = await prisma.client.upsert({
             where: { email },
             update: {},
@@ -131,6 +137,7 @@ export const authOptions: NextAuthOptions = {
               email: email,
               type: "INDIVIDUAL",
               status: "ACTIVE",
+              assignedTo: adminUser ? { connect: { id: adminUser.id } } : undefined,
             },
           });
 
@@ -192,6 +199,12 @@ export const authOptions: NextAuthOptions = {
           }
         }
         
+        // Find an admin user to assign to this client (for staff visibility)
+        const adminUser = await prisma.user.findFirst({
+          where: { role: "ADMIN", isActive: true },
+          select: { id: true }
+        })
+
         const clientData = await prisma.client.upsert({
           where: { email: user.email },
           update: {},
@@ -200,6 +213,7 @@ export const authOptions: NextAuthOptions = {
             email: user.email,
             type: "INDIVIDUAL",
             status: "ACTIVE",
+            assignedTo: adminUser ? { connect: { id: adminUser.id } } : undefined,
           },
         });
 
