@@ -10,7 +10,6 @@ import {
   FileText,
   ShieldCheck,
   UserCog,
-  Briefcase,
 } from "lucide-react"
 import { canManageUsers, isStaffLeadership, type Role } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
@@ -90,12 +89,6 @@ export function SidebarNav() {
               active={pathname === "/dashboard/users"}
             />
           )}
-          <NavLink
-            href="/dashboard/admin/clients"
-            label="Clients"
-            icon={Briefcase}
-            active={pathname === "/dashboard/admin/clients"}
-          />
         </>
       )}
     </nav>

@@ -5,41 +5,90 @@ import Link from "next/link"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, Plus, Search, Pin, PinOff, Trash2 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2, Plus, Search, Download, Pin, PinOff, Trash2, Building2, Users, UserCheck, UserPlus } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+interface AssignedUser {
+  id: string
+  name: string
+  email?: string
+  role?: string
+}
 
 interface Client {
   id: string
   name: string
   type: string
   status: string
+  email: string | null
+  phone: string | null
   pan: string | null
+  gstin: string | null
+  tan: string | null
   isPinned: boolean
-  assignedTo: { id: string; name: string }[]
+  createdAt: string
+  assignedTo: AssignedUser[]
+}
+
+type StatusFilter = "ALL" | "ACTIVE" | "ONBOARDING" | "INACTIVE"
+type TypeFilter = "ALL" | "BUSINESS" | "INDIVIDUAL"
+
+const STATUS_OPTIONS: { value: Exclude<StatusFilter, "ALL">; label: string }[] = [
+  { value: "ACTIVE", label: "Active" },
+  { value: "ONBOARDING", label: "Onboarding" },
+  { value: "INACTIVE", label: "Inactive" },
+]
+
+function getStatusVariant(status: string) {
+  switch (status) {
+    case "ACTIVE":
+      return "success"
+    case "ONBOARDING":
+      return "warning"
+    case "INACTIVE":
+      return "destructive"
+    default:
+      return "outline"
+  }
+}
+
+function escapeCsv(field: unknown): string {
+  const s = String(field ?? "")
+  return `"${s.replace(/"/g, '""')}"`
 }
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL")
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL")
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const res = await fetch("/api/clients", {
+        const res = await fetch("/api/clients?pageSize=100", {
           headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
         })
         if (res.ok) {
-          const _resData = await res.json()
-          const data = _resData.data || _resData
+          const json = await res.json()
+          const data = json.data || json
           setClients(data)
+          setTotal(json.pagination?.total ?? data.length)
+        } else {
+          setError("Failed to fetch clients")
         }
       } catch (err) {
-        console.error("Failed to fetch clients", err)
+        setError("An error occurred while fetching clients.")
       } finally {
         setLoading(false)
       }
@@ -53,13 +102,19 @@ export default function ClientsPage() {
       const res = await fetch(`/api/clients/${client.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isPinned: !client.isPinned })
+        body: JSON.stringify({ isPinned: !client.isPinned }),
       })
       if (res.ok) {
-        setClients(clients.map(c => c.id === client.id ? { ...c, isPinned: !c.isPinned } : c))
+        setClients((prev) =>
+          prev.map((c) => (c.id === client.id ? { ...c, isPinned: !c.isPinned } : c))
+        )
+      } else {
+        const _resData = await res.json()
+        const data = _resData.data || _resData
+        setError(data.error || "Failed to update pin")
       }
     } catch (e) {
-      console.error(e)
+      setError("Failed to update pin")
     } finally {
       setProcessingId(null)
     }
@@ -71,27 +126,104 @@ export default function ClientsPage() {
     try {
       const res = await fetch(`/api/clients/${client.id}`, { method: "DELETE" })
       if (res.ok) {
-        setClients(clients.filter(c => c.id !== client.id))
+        setClients((prev) => prev.filter((c) => c.id !== client.id))
       } else {
         const _resData = await res.json()
-          const data = _resData.data || _resData
-        alert(data.error || "Failed to delete client")
+        const data = _resData.data || _resData
+        setError(data.error || "Failed to delete client")
       }
     } catch (e) {
-      console.error(e)
-      alert("Failed to delete client")
+      setError("Failed to delete client")
     } finally {
       setProcessingId(null)
     }
   }
 
-  const filteredClients = clients
-    .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || (c.pan && c.pan.toLowerCase().includes(searchQuery.toLowerCase())))
-    .sort((a, b) => {
-      if (a.isPinned && !b.isPinned) return -1
-      if (!a.isPinned && b.isPinned) return 1
-      return 0
-    })
+  const handleStatusChange = async (clientId: string, newStatus: string) => {
+    setUpdatingId(clientId)
+    try {
+      const res = await fetch(`/api/clients/${clientId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok) {
+        const json = await res.json()
+        setError(json.error || "Failed to update status")
+        return
+      }
+      setClients((prev) =>
+        prev.map((c) => (c.id === clientId ? { ...c, status: newStatus } : c))
+      )
+    } catch (err) {
+      setError("Network error updating status")
+    } finally {
+      setUpdatingId(null)
+    }
+  }
+
+  const handleExport = () => {
+    const headers = [
+      "Name",
+      "Type",
+      "Status",
+      "Email",
+      "Phone",
+      "PAN",
+      "GSTIN",
+      "Assigned To",
+      "Created",
+    ]
+    const rows = filteredClients.map((c) => [
+      c.name,
+      c.type,
+      c.status,
+      c.email || "",
+      c.phone || "",
+      c.pan || "",
+      c.gstin || "",
+      c.assignedTo.map((u) => u.name).join("; "),
+      new Date(c.createdAt).toLocaleDateString(),
+    ])
+    const csv = [headers, ...rows]
+      .map((r) => r.map(escapeCsv).join(","))
+      .join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `clients-${new Date().toISOString().split("T")[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const filteredClients = (() => {
+    const q = searchQuery.trim().toLowerCase()
+    return clients
+      .filter((c) => {
+        const matchesSearch =
+          !q ||
+          c.name.toLowerCase().includes(q) ||
+          (c.email?.toLowerCase().includes(q) ?? false) ||
+          (c.pan?.toLowerCase().includes(q) ?? false) ||
+          (c.gstin?.toLowerCase().includes(q) ?? false)
+        const matchesStatus = statusFilter === "ALL" || c.status === statusFilter
+        const matchesType = typeFilter === "ALL" || c.type === typeFilter
+        return matchesSearch && matchesStatus && matchesType
+      })
+      .sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1
+        if (!a.isPinned && b.isPinned) return 1
+        return 0
+      })
+  })()
+
+  const stats = (() => ({
+    total: clients.length,
+    active: clients.filter((c) => c.status === "ACTIVE").length,
+    onboarding: clients.filter((c) => c.status === "ONBOARDING").length,
+    inactive: clients.filter((c) => c.status === "INACTIVE").length,
+  }))()
 
   if (loading) {
     return (
@@ -102,92 +234,214 @@ export default function ClientsPage() {
     )
   }
 
-  const getStatusVariant = (status: string) => {
-    switch (status) {
-      case 'ACTIVE': return 'success'
-      case 'ONBOARDING': return 'warning'
-      case 'INACTIVE': return 'destructive'
-      default: return 'outline'
-    }
-  }
+  const statCards = [
+    { label: "Total Clients", value: stats.total, icon: Building2, accent: "text-primary" },
+    { label: "Active", value: stats.active, icon: UserCheck, accent: "text-green-500" },
+    { label: "Onboarding", value: stats.onboarding, icon: UserPlus, accent: "text-amber-500" },
+    { label: "Inactive", value: stats.inactive, icon: Users, accent: "text-muted-foreground" },
+  ]
 
   return (
     <div className="space-y-8 animate-slide-up">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground/90">Clients</h1>
-          <p className="text-sm text-muted-foreground">Manage your firm&apos;s client portfolio.</p>
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground/90">
+            Clients
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Manage your firm&apos;s client portfolio — update status, pin key clients, and export records.
+          </p>
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search clients..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-9 pl-9 pr-4 rounded-xl border border-input bg-background text-sm outline-none transition-all focus:border-primary focus:ring-1 focus:ring-primary"
-            />
-          </div>
-          <Link href="/dashboard/clients/new" className={buttonVariants({ variant: "default", size: "icon", className: "h-9 w-9 shrink-0 rounded-xl" })}>
-            <Plus className="h-5 w-5" strokeWidth={2.5} />
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={filteredClients.length === 0}
+            className="h-9"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
+          <Link
+            href="/dashboard/clients/new"
+            className={buttonVariants({ variant: "default", size: "sm", className: "h-9" })}
+          >
+            <Plus className="h-4 w-4 mr-2" strokeWidth={2.5} />
+            New Client
           </Link>
         </div>
       </div>
 
-      <div className="animate-fade-in" style={{ animationDelay: '100ms' }}>
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {statCards.map((s) => (
+          <div
+            key={s.label}
+            className="bg-card border border-border rounded-2xl shadow-sm p-4 flex items-center gap-3"
+          >
+            <div className="h-10 w-10 rounded-xl bg-muted/50 flex items-center justify-center shrink-0">
+              <s.icon className={cn("h-5 w-5", s.accent)} />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-xl font-bold text-foreground leading-none">{s.value}</span>
+              <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold mt-1">
+                {s.label}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {error && (
+        <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-4 text-sm font-medium text-destructive animate-fade-in">
+          {error}
+        </div>
+      )}
+
+      {/* Filters & Search */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search by name, email, PAN, GSTIN..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-9 pl-9 pr-4 rounded-xl border border-input bg-background text-sm outline-none transition-all focus:border-primary focus:ring-1 focus:ring-primary"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+          <SelectTrigger className="w-full sm:w-[160px] h-9">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Statuses</SelectItem>
+            {STATUS_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
+          <SelectTrigger className="w-full sm:w-[160px] h-9">
+            <SelectValue placeholder="Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Types</SelectItem>
+            <SelectItem value="BUSINESS">Business</SelectItem>
+            <SelectItem value="INDIVIDUAL">Individual</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="animate-fade-in">
         {clients.length === 0 ? (
           <div className="bg-card border border-border rounded-2xl shadow-sm flex flex-col items-center justify-center py-16 gap-3 text-center">
             <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-              <Search className="h-5 w-5 text-muted-foreground" />
+              <Building2 className="h-5 w-5 text-muted-foreground" />
             </div>
             <p className="text-sm font-medium text-foreground">No clients yet</p>
             <p className="text-xs text-muted-foreground">Add your first client to get started.</p>
           </div>
         ) : (
           <>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <p className="text-xs text-muted-foreground">
+                Showing {filteredClients.length} of {total} client{total === 1 ? "" : "s"}
+              </p>
+            </div>
+
             {/* Mobile Cards */}
             <div className="grid grid-cols-1 gap-4 md:hidden">
-              {filteredClients.map((client) => (
-                <div key={client.id} className="bg-card border border-border rounded-2xl shadow-sm p-4 flex flex-col gap-3 relative overflow-hidden hover:shadow-md transition-shadow duration-200">
+              {filteredClients.length === 0 ? (
+                <div className="bg-card border border-border rounded-2xl shadow-sm flex flex-col items-center justify-center py-16 gap-3 text-center">
+                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                    <Search className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-medium text-foreground">No clients match your filters</p>
+                  <p className="text-xs text-muted-foreground">Try adjusting your search or filters.</p>
+                </div>
+              ) : filteredClients.map((client) => (
+                <div
+                  key={client.id}
+                  className="bg-card border border-border rounded-2xl shadow-sm p-4 flex flex-col gap-3 relative overflow-hidden hover:shadow-md transition-shadow duration-200"
+                >
                   <div className="flex justify-between items-start gap-2">
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-2">
-                        {client.isPinned && <Pin className="h-3.5 w-3.5 text-amber-500 fill-amber-500/20" />}
-                        <span className="font-bold text-foreground text-base leading-tight">{client.name}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      {client.isPinned && <Pin className="h-3.5 w-3.5 text-amber-500 fill-amber-500/20 shrink-0" />}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-xs border border-border/50 shrink-0">
+                          {client.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span className="font-bold text-foreground text-base leading-tight truncate">
+                            {client.name}
+                          </span>
+                          <span className="text-xs font-medium text-muted-foreground">{client.type}</span>
+                        </div>
                       </div>
-                      <span className="text-xs font-medium text-muted-foreground">{client.type}</span>
                     </div>
                     <Badge variant={getStatusVariant(client.status) as "default" | "secondary" | "destructive" | "success" | "warning" | "outline"} className="shrink-0">
                       {client.status}
                     </Badge>
                   </div>
-                  
-                  <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/50 mt-1">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Assigned To</span>
-                      <span className="text-sm font-medium text-foreground">{client.assignedTo.map(u => u.name).join(", ") || "-"}</span>
+
+                  {client.email && (
+                    <div className="text-xs text-muted-foreground truncate">{client.email}</div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/50">
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+                        Assigned To
+                      </span>
+                      <span className="text-sm font-medium text-foreground truncate">
+                        {client.assignedTo.map((u) => u.name).join(", ") || "-"}
+                      </span>
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">PAN</span>
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+                        PAN
+                      </span>
                       <span className="text-sm font-medium text-foreground">{client.pan || "-"}</span>
                     </div>
                   </div>
 
+                  <div className="pt-3 border-t border-border/50 flex items-center gap-2">
+                    <Select
+                      value={client.status}
+                      onValueChange={(val) => { if (val) handleStatusChange(client.id, val) }}
+                      disabled={updatingId === client.id}
+                    >
+                      <SelectTrigger className="w-full h-9 text-xs font-medium">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="pt-3 border-t border-border/50 mt-1 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
                         onClick={() => handleTogglePin(client)}
                         disabled={processingId === client.id}
                       >
                         {client.isPinned ? <PinOff className="h-4 w-4 text-amber-500" /> : <Pin className="h-4 w-4" />}
                       </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                         onClick={() => handleDelete(client)}
                         disabled={processingId === client.id}
@@ -208,53 +462,94 @@ export default function ClientsPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-b border-border hover:bg-transparent">
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Name</TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Type</TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">PAN</TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Assigned To</TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Actions</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Name
+                    </TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Type
+                    </TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Status
+                    </TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      PAN
+                    </TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Assigned To
+                    </TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Actions
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredClients.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-12 text-sm text-muted-foreground">
-                        No clients match your search.
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                            <Search className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">No clients match your filters</p>
+                            <p className="text-xs text-muted-foreground">Try adjusting your search or filters.</p>
+                          </div>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ) : filteredClients.map((client) => (
                     <TableRow key={client.id} className="transition-colors duration-150 hover:bg-muted/30 border-b border-border/50">
                       <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {client.isPinned && <Pin className="h-3.5 w-3.5 text-amber-500 fill-amber-500/20" />}
-                          {client.name}
+                        <div className="flex items-center gap-3">
+                          {client.isPinned && <Pin className="h-3.5 w-3.5 text-amber-500 fill-amber-500/20 shrink-0" />}
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-xs border border-border/50 shrink-0">
+                            {client.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-foreground">{client.name}</span>
+                            {client.email && (
+                              <span className="text-xs text-muted-foreground">{client.email}</span>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>{client.type}</TableCell>
                       <TableCell>
-                        <Badge variant={getStatusVariant(client.status) as "default" | "secondary" | "destructive" | "success" | "warning" | "outline"}>
-                          {client.status}
-                        </Badge>
+                        <Select
+                          value={client.status}
+                          onValueChange={(val) => { if (val) handleStatusChange(client.id, val) }}
+                          disabled={updatingId === client.id}
+                        >
+                          <SelectTrigger className="w-[140px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {STATUS_OPTIONS.map((o) => (
+                              <SelectItem key={o.value} value={o.value}>
+                                {o.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                       <TableCell>{client.pan || "-"}</TableCell>
                       <TableCell>
-                        {client.assignedTo.map(u => u.name).join(", ") || "-"}
+                        {client.assignedTo.map((u) => u.name).join(", ") || "-"}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-8 w-8 text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
                             onClick={() => handleTogglePin(client)}
                             disabled={processingId === client.id}
                           >
                             {client.isPinned ? <PinOff className="h-4 w-4 text-amber-500" /> : <Pin className="h-4 w-4" />}
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                             onClick={() => handleDelete(client)}
                             disabled={processingId === client.id}
