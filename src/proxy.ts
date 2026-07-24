@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { withAuth } from "next-auth/middleware";
+import { getToken } from "next-auth/jwt";
 import { rateLimit, getClientIp, rateLimitHeaders, type RateLimitBucket } from "@/lib/rate-limit";
 import { logger, getOrCreateRequestId, withRequestId } from "@/lib/logger";
 import { getRedirectTarget } from "@/lib/middleware-logic";
@@ -36,9 +36,9 @@ async function rateLimitMiddleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-async function authMiddleware(request: NextRequest) {
+async function authMiddleware(request: NextRequest, token: any) {
   const { pathname } = request.nextUrl;
-  const role = (request as unknown as { nextauth?: { token?: { role?: string } } }).nextauth?.token?.role as string | undefined;
+  const role = token?.role as string | undefined;
 
   const target = getRedirectTarget(pathname, role);
 
@@ -54,44 +54,38 @@ async function authMiddleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-export default withAuth(
-  async function middleware(request: NextRequest) {
-    const requestId = getOrCreateRequestId(request);
-    const log = logger.child({ requestId });
-    const start = Date.now();
+export async function middleware(request: NextRequest) {
+  const requestId = getOrCreateRequestId(request);
+  const log = logger.child({ requestId });
+  const start = Date.now();
 
-    const rateLimitResponse = await rateLimitMiddleware(request);
-    if (rateLimitResponse.status === 429) {
-      log.warn({ path: request.nextUrl.pathname }, "rate limit exceeded");
-      return withRequestId(rateLimitResponse, requestId);
-    }
-
-    const authResponse = await authMiddleware(request);
-    if (authResponse.status !== 200) {
-      return withRequestId(authResponse, requestId);
-    }
-
-    const response = NextResponse.next();
-    withRequestId(response, requestId);
-
-    const duration = Date.now() - start;
-    if (duration > 500) {
-      log.warn({ path: request.nextUrl.pathname, durationMs: duration }, "slow request");
-    } else {
-      log.debug({ path: request.nextUrl.pathname, durationMs: duration }, "request completed");
-    }
-
-    return response;
-  },
-  {
-    callbacks: {
-      authorized: () => true,
-    },
-    pages: {
-      signIn: "/login",
-    },
+  const rateLimitResponse = await rateLimitMiddleware(request);
+  if (rateLimitResponse.status === 429) {
+    log.warn({ path: request.nextUrl.pathname }, "rate limit exceeded");
+    return withRequestId(rateLimitResponse, requestId);
   }
-);
+
+  // Get token directly to prevent next-auth's withAuth wrapper from applying
+  // hidden automated redirects away from /login when a stale session exists.
+  const token = await getToken({ req: request });
+
+  const authResponse = await authMiddleware(request, token);
+  if (authResponse.status !== 200) {
+    return withRequestId(authResponse, requestId);
+  }
+
+  const response = NextResponse.next();
+  withRequestId(response, requestId);
+
+  const duration = Date.now() - start;
+  if (duration > 500) {
+    log.warn({ path: request.nextUrl.pathname, durationMs: duration }, "slow request");
+  } else {
+    log.debug({ path: request.nextUrl.pathname, durationMs: duration }, "request completed");
+  }
+
+  return response;
+}
 
 export const config = {
   matcher: [
