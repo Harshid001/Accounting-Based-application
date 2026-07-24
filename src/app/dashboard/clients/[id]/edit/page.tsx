@@ -16,10 +16,20 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
   const [formData, setFormData] = useState({
     name: "",
     type: "BUSINESS",
+    email: "",
+    phone: "",
     pan: "",
     gstin: "",
     tan: "",
     address: "",
+    aadhar: "",
+    cin: "",
+    incorporationDate: "",
+    primaryContactName: "",
+    state: "",
+    city: "",
+    pincode: "",
+    website: "",
     status: "ACTIVE",
     assignedToIds: [] as string[]
   })
@@ -43,10 +53,20 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
         setFormData({
           name: data.name || "",
           type: data.type || "BUSINESS",
+          email: data.email || "",
+          phone: data.phone || "",
           pan: data.pan || "",
           gstin: data.gstin || "",
           tan: data.tan || "",
           address: data.address || "",
+          aadhar: data.aadhar || "",
+          cin: data.cin || "",
+          incorporationDate: data.incorporationDate ? new Date(data.incorporationDate).toISOString().split("T")[0] : "",
+          primaryContactName: data.primaryContactName || "",
+          state: data.state || "",
+          city: data.city || "",
+          pincode: data.pincode || "",
+          website: data.website || "",
           status: data.status || "ACTIVE",
           assignedToIds: data.assignedTo?.map((u: { id: string }) => u.id) || []
         })
@@ -61,10 +81,14 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
     setError("")
 
     try {
+      const payload = {
+        ...formData,
+        incorporationDate: formData.incorporationDate ? new Date(formData.incorporationDate).toISOString() : null
+      }
       const res = await fetch(`/api/clients/${resolvedParams.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       })
 
       if (!res.ok) {
@@ -147,10 +171,60 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
             </div>
           </div>
 
+          <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
+            <div className="space-y-2 flex-1">
+              <Label>Email</Label>
+              <Input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+            </div>
+            <div className="space-y-2 flex-1">
+              <Label>Phone</Label>
+              <Input type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label>PAN Number</Label>
             <Input type="text" value={formData.pan} onChange={e => setFormData({...formData, pan: e.target.value})} />
           </div>
+
+          {formData.type === "INDIVIDUAL" && (
+            <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
+              <div className="space-y-2 flex-1">
+                <Label>Aadhar Number</Label>
+                <Input type="text" value={formData.aadhar} onChange={e => setFormData({...formData, aadhar: e.target.value})} />
+              </div>
+              <div className="space-y-2 flex-1">
+                <Label>Date of Birth</Label>
+                <Input type="date" value={formData.incorporationDate ? formData.incorporationDate.split("T")[0] : ""} onChange={e => setFormData({...formData, incorporationDate: e.target.value})} />
+              </div>
+            </div>
+          )}
+
+          {formData.type === "BUSINESS" && (
+            <>
+              <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
+                <div className="space-y-2 flex-1">
+                  <Label>CIN</Label>
+                  <Input type="text" value={formData.cin} onChange={e => setFormData({...formData, cin: e.target.value})} />
+                </div>
+                <div className="space-y-2 flex-1">
+                  <Label>Date of Incorporation</Label>
+                  <Input type="date" value={formData.incorporationDate ? formData.incorporationDate.split("T")[0] : ""} onChange={e => setFormData({...formData, incorporationDate: e.target.value})} />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
+                <div className="space-y-2 flex-1">
+                  <Label>Contact Person</Label>
+                  <Input type="text" value={formData.primaryContactName} onChange={e => setFormData({...formData, primaryContactName: e.target.value})} />
+                </div>
+                <div className="space-y-2 flex-1">
+                  <Label>Website</Label>
+                  <Input type="url" value={formData.website} onChange={e => setFormData({...formData, website: e.target.value})} />
+                </div>
+              </div>
+            </>
+          )}
 
           {formData.type === "BUSINESS" && (
             <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
@@ -168,6 +242,21 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
           <div className="space-y-2">
             <Label>Address</Label>
             <Input type="text" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+          </div>
+
+          <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
+            <div className="space-y-2 flex-1">
+              <Label>City</Label>
+              <Input type="text" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} />
+            </div>
+            <div className="space-y-2 flex-1">
+              <Label>State</Label>
+              <Input type="text" value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} />
+            </div>
+            <div className="space-y-2 flex-1">
+              <Label>Pincode</Label>
+              <Input type="text" value={formData.pincode} onChange={e => setFormData({...formData, pincode: e.target.value})} />
+            </div>
           </div>
 
           <div className="space-y-3 pt-2">

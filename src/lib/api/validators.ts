@@ -9,6 +9,14 @@ export const createClientSchema = z.object({
   gstin: z.string().max(15).optional().nullable(),
   tan: z.string().max(10).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
+  aadhar: z.string().max(12).optional().nullable(),
+  cin: z.string().max(21).optional().nullable(),
+  incorporationDate: z.string().datetime().optional().nullable(),
+  primaryContactName: z.string().max(200).optional().nullable(),
+  state: z.string().max(100).optional().nullable(),
+  city: z.string().max(100).optional().nullable(),
+  pincode: z.string().max(10).optional().nullable(),
+  website: z.string().max(200).optional().nullable(),
   status: z.enum(["ACTIVE", "INACTIVE", "ONBOARDING"]).default("ACTIVE"),
   assignedToIds: z.array(z.string().cuid()).optional(),
 });
@@ -101,6 +109,10 @@ export const paginationSchema = z.object({
 export const taskFiltersSchema = paginationSchema.extend({
   clientId: z.preprocess(nullToUndefined, z.string().cuid().optional()),
   status: z.preprocess(nullToUndefined, z.enum(["NOT_STARTED", "IN_PROGRESS", "REVIEW", "DONE"]).optional()),
+  assigneeId: z.preprocess(nullToUndefined, z.string().cuid().optional()),
+  search: z.preprocess(nullToUndefined, z.string().max(255).optional()),
+  sortBy: z.preprocess(nullToUndefined, z.enum(["dueDate", "createdAt", "title"]).optional()),
+  sortOrder: z.preprocess(nullToUndefined, z.enum(["asc", "desc"]).optional()),
 });
 
 export const invoiceFiltersSchema = paginationSchema.extend({

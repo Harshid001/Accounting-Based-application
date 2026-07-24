@@ -59,9 +59,13 @@ export const PATCH = withAuth(async (req: NextRequest, { user, prisma }) => {
   }
 
   const body = await req.json();
-  const { assignedToIds, ...otherFields } = validateBody(body, updateClientSchema);
+  const { assignedToIds, incorporationDate, ...otherFields } = validateBody(body, updateClientSchema);
 
   const updateData: Record<string, unknown> = { ...otherFields };
+
+  if (incorporationDate !== undefined) {
+    updateData.incorporationDate = incorporationDate ? new Date(incorporationDate) : null;
+  }
 
   if (assignedToIds !== undefined) {
     if (!isLeadership(user.role)) {

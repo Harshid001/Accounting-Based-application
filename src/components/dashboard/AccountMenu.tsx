@@ -52,7 +52,7 @@ export default function AccountMenu() {
             initial
           )}
         </span>
-        <span className="hidden sm:inline">{role || name}</span>
+        <span className="hidden sm:inline">{name}</span>
         <ChevronDown
           size={14}
           className={`transition-transform ${open ? "rotate-180" : ""}`}

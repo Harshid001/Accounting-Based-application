@@ -4,15 +4,17 @@
  * Staff Tasks dashboard.
  *
  * Data contract:
- *   GET   /api/tasks              -> Task[]
+ *   GET   /api/tasks              -> Task[] (supports search, clientId, assigneeId, status, sortBy, sortOrder)
  *   PATCH /api/tasks/[id]         -> { status? } for assigned staff,
- *                                     { status?, assignedToId? } for Admin/Manager
- *   POST  /api/tasks              -> { title, clientId, assignedToId, dueDate? }
- *   GET   /api/clients            -> { id, name }[]        (Create dialog)
- *   GET   /api/users?role=STAFF   -> { id, name }[]         (assignee pickers)
+ *                                     { status?, assignedToId?, description? } for Admin/Manager
+ *   POST  /api/tasks              -> { title, clientId, assignedToId, dueDate?, description?, complianceItemId? }
+ *   GET   /api/clients            -> { id, name }[]        (Create dialog + filters)
+ *   GET   /api/users?role=STAFF   -> { id, name }[]         (assignee pickers + filters)
+ *   GET   /api/compliance?clientId -> compliance items for selected client
+ *   POST  /api/comments           -> { content, parentType: "task", parentId }
  */
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import {
   Table,
@@ -21,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -29,17 +32,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, ClipboardList, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   canCreateTask,
@@ -49,21 +43,27 @@ import {
 } from "@/lib/permissions";
 import { TaskRow } from "@/components/dashboard/TaskRow";
 import { TaskCard } from "@/components/dashboard/TaskCard";
+import {
+  TaskDetailsDrawer,
+  type TaskWithDetails,
+} from "@/components/dashboard/TaskDetailsDrawer";
 
 type TaskStatus = "NOT_STARTED" | "IN_PROGRESS" | "REVIEW" | "DONE";
+type SortBy = "dueDate" | "createdAt";
+type SortOrder = "asc" | "desc";
 
-interface Task {
-  id: string;
-  title: string;
-  status: TaskStatus;
-  client: { id: string; name: string } | null;
-  assignedTo: { id: string; name: string } | null;
-  dueDate: string | null;
-}
+interface Task extends TaskWithDetails {}
 
 interface Person {
   id: string;
   name: string;
+}
+
+interface ComplianceItem {
+  id: string;
+  type: string;
+  status: string;
+  dueDate: string;
 }
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
@@ -74,10 +74,10 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 };
 
 const STATUS_STYLE: Record<TaskStatus, string> = {
-  NOT_STARTED: "bg-muted/50 text-foreground border-border/60",
-  IN_PROGRESS: "bg-muted/50 text-foreground border-border/60",
-  REVIEW: "bg-muted/50 text-foreground border-border/60",
-  DONE: "bg-muted/50 text-foreground border-border/60",
+  NOT_STARTED: "bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200",
+  IN_PROGRESS: "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200",
+  REVIEW: "bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-200",
+  DONE: "bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200",
 };
 
 export function TaskDashboard() {
@@ -91,10 +91,23 @@ export function TaskDashboard() {
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "ALL">("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
   const [reassignTaskId, setReassignTaskId] = useState<string | null>(null);
 
+  // Filtering & sorting state
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [clientFilter, setClientFilter] = useState<string>("ALL");
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("ALL");
+  const [sortBy, setSortBy] = useState<SortBy>("dueDate");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+
+  // Drawer state
+  const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   const loadTasksRef = useRef<() => void>(() => {});
+
+  const isLeadership = !!role && isStaffLeadership(role);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,7 +117,15 @@ export function TaskDashboard() {
         setError(null);
       }
       try {
-        const res = await fetch("/api/tasks");
+        const params = new URLSearchParams();
+        if (searchQuery) params.set("search", searchQuery);
+        if (clientFilter !== "ALL") params.set("clientId", clientFilter);
+        if (assigneeFilter !== "ALL") params.set("assigneeId", assigneeFilter);
+        if (statusFilter !== "ALL") params.set("status", statusFilter);
+        params.set("sortBy", sortBy);
+        params.set("sortOrder", sortOrder);
+
+        const res = await fetch(`/api/tasks?${params.toString()}`);
         if (!res.ok) throw new Error();
         const _taskData = await res.json();
         if (!cancelled) setTasks(_taskData.data || _taskData);
@@ -115,7 +136,7 @@ export function TaskDashboard() {
       }
     };
     loadTasksRef.current = loadTasks;
-    loadTasksRef.current();
+
     if (role && canCreateTask(role)) {
       fetch("/api/clients")
         .then((r) => (r.ok ? r.json() : { data: [] }))
@@ -127,6 +148,19 @@ export function TaskDashboard() {
     return () => { cancelled = true };
   }, [role]);
 
+  // Debounced search
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Reload tasks when filters/sort/search change
+  useEffect(() => {
+    loadTasksRef.current();
+  }, [searchQuery, clientFilter, assigneeFilter, statusFilter, sortBy, sortOrder]);
+
   async function updateStatus(taskId: string, status: TaskStatus) {
     await fetch(`/api/tasks/${taskId}`, {
       method: "PATCH",
@@ -134,6 +168,11 @@ export function TaskDashboard() {
       body: JSON.stringify({ status }),
     });
     loadTasksRef.current();
+    if (drawerTaskId === taskId) {
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status } : t))
+      );
+    }
   }
 
   async function reassign(taskId: string, assignedToId: string) {
@@ -146,24 +185,53 @@ export function TaskDashboard() {
     loadTasksRef.current();
   }
 
-  async function createTask(form: FormData) {
-    await fetch("/api/tasks", {
+  async function saveDescription(taskId: string, description: string) {
+    await fetch(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description }),
+    });
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, description } : t))
+    );
+  }
+
+  async function addComment(taskId: string, content: string) {
+    const res = await fetch("/api/comments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title: form.get("title"),
-        clientId: form.get("clientId"),
-        assignedToId: form.get("assignedToId"),
-        dueDate: form.get("dueDate") || null,
+        content,
+        parentType: "task",
+        parentId: taskId,
       }),
     });
-    setCreateOpen(false);
-    loadTasksRef.current();
+    if (res.ok) {
+      const newComment = await res.json();
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? { ...t, Comment: [...(t.Comment ?? []), newComment] }
+            : t
+        )
+      );
+    }
   }
 
-  const visibleTasks =
-    statusFilter === "ALL" ? tasks : tasks.filter((t) => t.status === statusFilter);
-  const canEditStatus = (task: Task) => !!role && (isStaffLeadership(role) || task.assignedTo?.id === userId);
+  const openDrawer = useCallback((taskId: string) => {
+    setDrawerTaskId(taskId);
+    setDrawerOpen(true);
+  }, []);
+
+  const closeDrawer = useCallback(() => {
+    setDrawerOpen(false);
+  }, []);
+
+  const drawerTask = tasks.find((t) => t.id === drawerTaskId) ?? null;
+
+  const visibleTasks = tasks;
+  const canEditStatus = (task: Task) =>
+    !!role && (isStaffLeadership(role) || task.assignedTo?.id === userId);
   const canReassign = !!role && canReassignTask(role);
 
   return (
@@ -179,72 +247,92 @@ export function TaskDashboard() {
         </div>
 
         {role && canCreateTask(role) && (
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger
-              render={
-                <Button size="icon" className="h-10 w-10 shrink-0 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all bg-primary text-primary-foreground">
-                  <Plus className="h-5 w-5" strokeWidth={2.5} />
-                </Button>
-              }
-            />
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create a task</DialogTitle>
-              </DialogHeader>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  createTask(new FormData(e.currentTarget));
-                }}
-                className="space-y-4"
-              >
-                <div className="space-y-1.5">
-                  <Label htmlFor="title">Title</Label>
-                  <Input id="title" name="title" required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="clientId">Client</Label>
-                  <select
-                    id="clientId"
-                    name="clientId"
-                    required
-                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  >
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="assignedToId">Assign to</Label>
-                  <select
-                    id="assignedToId"
-                    name="assignedToId"
-                    required
-                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  >
-                    {staff.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="dueDate">Due date (optional)</Label>
-                  <Input id="dueDate" name="dueDate" type="date" />
-                </div>
-                <DialogFooter>
-                  <Button type="submit">Create task</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Link href="/dashboard/tasks/new">
+            <Button size="icon" className="h-10 w-10 shrink-0 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all bg-primary text-primary-foreground">
+              <Plus className="h-5 w-5" strokeWidth={2.5} />
+            </Button>
+          </Link>
         )}
       </div>
 
+      {/* Search & Filters Bar */}
+      <div className="flex flex-col gap-3 animate-fade-in" style={{ animationDelay: "50ms" }}>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search tasks by title or description…"
+            className="pl-9 pr-9"
+          />
+          {searchInput && (
+            <button
+              onClick={() => setSearchInput("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Client filter */}
+          <Select value={clientFilter} onValueChange={(v) => setClientFilter(v ?? "ALL")}>
+            <SelectTrigger size="sm" className="w-[160px]">
+              <SelectValue placeholder="Client" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All clients</SelectItem>
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Assignee filter (managers/admins only) */}
+          {isLeadership && (
+            <Select value={assigneeFilter} onValueChange={(v) => setAssigneeFilter(v ?? "ALL")}>
+              <SelectTrigger size="sm" className="w-[160px]">
+                <SelectValue placeholder="Assignee" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All assignees</SelectItem>
+                {staff.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {/* Sort by */}
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortBy)}>
+            <SelectTrigger size="sm" className="w-[150px]">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="dueDate">Due date</SelectItem>
+              <SelectItem value="createdAt">Creation date</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Sort order toggle */}
+          <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as SortOrder)}>
+            <SelectTrigger size="sm" className="w-[110px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="asc">Ascending</SelectItem>
+              <SelectItem value="desc">Descending</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Status filter pills */}
       <div className="flex flex-wrap gap-2 animate-fade-in" style={{ animationDelay: "100ms" }}>
         {(["ALL", "NOT_STARTED", "IN_PROGRESS", "REVIEW", "DONE"] as const).map((s) => (
           <button
@@ -277,10 +365,10 @@ export function TaskDashboard() {
       ) : visibleTasks.length === 0 ? (
         <div className="bg-card border border-border rounded-2xl shadow-sm px-4 py-16 flex flex-col items-center justify-center gap-3 text-center animate-fade-in">
           <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-            <Loader2 className="h-5 w-5 text-muted-foreground" />
+            <ClipboardList className="h-5 w-5 text-muted-foreground" />
           </div>
           <p className="text-sm font-medium text-foreground">No tasks match this filter</p>
-          <p className="text-xs text-muted-foreground">Try selecting a different status or create a new task.</p>
+          <p className="text-xs text-muted-foreground">Try adjusting your search or filters, or create a new task.</p>
         </div>
       ) : (
         <div className="animate-fade-in" style={{ animationDelay: "200ms" }}>
@@ -295,6 +383,7 @@ export function TaskDashboard() {
                 currentAssigneeId={task.assignedTo?.id ?? null}
                 onStatusChange={updateStatus}
                 onReassign={reassign}
+                onCardClick={openDrawer}
                 reassignOpenTaskId={reassignTaskId}
                 setReassignOpenTaskId={setReassignTaskId}
                 staff={staff}
@@ -327,6 +416,7 @@ export function TaskDashboard() {
                     currentAssigneeId={task.assignedTo?.id ?? null}
                     onStatusChange={updateStatus}
                     onReassign={reassign}
+                    onRowClick={openDrawer}
                     reassignOpenTaskId={reassignTaskId}
                     setReassignOpenTaskId={setReassignTaskId}
                     staff={staff}
@@ -337,6 +427,16 @@ export function TaskDashboard() {
           </div>
         </div>
       )}
+
+      {/* Task Details Drawer */}
+      <TaskDetailsDrawer
+        task={drawerTask}
+        open={drawerOpen}
+        onOpenChange={(open) => { if (!open) closeDrawer(); }}
+        onDescriptionSave={saveDescription}
+        onAddComment={addComment}
+        canEditDetails={isLeadership}
+      />
     </div>
   );
 }

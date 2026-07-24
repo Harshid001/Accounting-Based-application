@@ -27,7 +27,11 @@ export const GET = withAuth(async (req: NextRequest, { user, prisma }) => {
     page: searchParams.get("page") ?? undefined,
     pageSize: searchParams.get("pageSize") ?? undefined,
     clientId: searchParams.get("clientId") ?? undefined,
+    assigneeId: searchParams.get("assigneeId") ?? undefined,
     status: searchParams.get("status") ?? undefined,
+    search: searchParams.get("search") ?? undefined,
+    sortBy: searchParams.get("sortBy") ?? undefined,
+    sortOrder: searchParams.get("sortOrder") ?? undefined,
   });
 
   const userRole = user.role as Role;
@@ -36,8 +40,26 @@ export const GET = withAuth(async (req: NextRequest, { user, prisma }) => {
   const whereClause: Prisma.TaskWhereInput & { AND?: Prisma.TaskWhereInput[] } = { AND: [] };
   if (scope) whereClause.AND!.push(scope);
   if (filters.clientId) whereClause.AND!.push({ clientId: filters.clientId });
+  if (filters.assigneeId) whereClause.AND!.push({ assignedToId: filters.assigneeId });
   if (filters.status) whereClause.AND!.push({ status: filters.status });
+  if (filters.search) {
+    whereClause.AND!.push({
+      OR: [
+        { title: { contains: filters.search, mode: "insensitive" } },
+        { description: { contains: filters.search, mode: "insensitive" } },
+      ],
+    });
+  }
   if (whereClause.AND!.length === 0) delete whereClause.AND;
+
+  const sortField = filters.sortBy ?? "dueDate";
+  const sortDirection = filters.sortOrder ?? "asc";
+  const orderBy: Prisma.TaskOrderByWithRelationInput[] =
+    sortField === "title"
+      ? [{ title: sortDirection }, { createdAt: "desc" }]
+      : sortField === "createdAt"
+        ? [{ createdAt: sortDirection }]
+        : [{ dueDate: sortDirection }, { createdAt: "desc" }];
 
   const [tasks, total] = await Promise.all([
     prisma.task.findMany({
@@ -46,8 +68,12 @@ export const GET = withAuth(async (req: NextRequest, { user, prisma }) => {
         assignedTo: { select: { id: true, name: true, email: true } },
         client: { select: { id: true, name: true } },
         complianceItem: { select: { id: true, type: true } },
+        Comment: {
+          include: { User: { select: { id: true, name: true } } },
+          orderBy: { createdAt: "asc" },
+        },
       },
-      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+      orderBy,
       skip: (filters.page - 1) * filters.pageSize,
       take: filters.pageSize,
     }),

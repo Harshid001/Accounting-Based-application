@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Users } from "lucide-react";
+import { Users, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type TaskStatus = "NOT_STARTED" | "IN_PROGRESS" | "REVIEW" | "DONE";
@@ -14,6 +14,7 @@ interface TaskCardProps {
   task: {
     id: string;
     title: string;
+    description?: string | null;
     status: TaskStatus;
     client: { id: string; name: string } | null;
     assignedTo: { id: string; name: string } | null;
@@ -24,11 +25,17 @@ interface TaskCardProps {
   currentAssigneeId: string | null;
   onStatusChange: (taskId: string, status: TaskStatus) => Promise<void>;
   onReassign: (taskId: string, assignedToId: string) => Promise<void>;
+  onCardClick?: (taskId: string) => void;
   reassignOpenTaskId: string | null;
   setReassignOpenTaskId: (taskId: string | null) => void;
   staff: { id: string; name: string }[];
   statusLabels: Record<TaskStatus, string>;
   statusStyles: Record<TaskStatus, string>;
+}
+
+function isOverdue(dueDate: string | null, status: TaskStatus): boolean {
+  if (!dueDate || status === "DONE") return false;
+  return new Date(dueDate) < new Date();
 }
 
 export function TaskCard({
@@ -38,14 +45,22 @@ export function TaskCard({
   currentAssigneeId,
   onStatusChange,
   onReassign,
+  onCardClick,
   reassignOpenTaskId,
   setReassignOpenTaskId,
   staff,
   statusLabels,
   statusStyles,
 }: TaskCardProps) {
+  const overdue = isOverdue(task.dueDate, task.status);
   return (
-    <div className="bg-card border border-border rounded-2xl shadow-sm p-4 flex flex-col gap-3 relative overflow-hidden hover:shadow-md transition-shadow duration-200">
+    <div
+      onClick={() => onCardClick?.(task.id)}
+      className={cn(
+        "bg-card border border-border rounded-2xl shadow-sm p-4 flex flex-col gap-3 relative overflow-hidden hover:shadow-md transition-shadow duration-200",
+        onCardClick && "cursor-pointer"
+      )}
+    >
       <div className="flex justify-between items-start gap-2">
         <div className="flex flex-col gap-1">
           <span className="font-bold text-foreground text-base leading-tight">{task.title}</span>
@@ -58,9 +73,7 @@ export function TaskCard({
           >
             <DialogTrigger
               render={
-                <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0">
-                  <Users className="h-4 w-4" />
-                </Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={(e: React.MouseEvent) => e.stopPropagation()} />
               }
             />
             <DialogContent>
@@ -99,11 +112,14 @@ export function TaskCard({
         </div>
         <div className="flex flex-col items-end">
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Due</span>
-          <span className="text-sm font-medium text-foreground">{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "—"}</span>
+          <span className={cn("inline-flex items-center gap-1 text-sm font-medium", overdue ? "text-red-600" : "text-foreground")}>
+            {overdue && <AlertTriangle className="h-3.5 w-3.5" />}
+            {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "—"}
+          </span>
         </div>
       </div>
 
-      <div className="pt-2">
+      <div className="pt-2" onClick={(e) => e.stopPropagation()}>
         {canEditStatus ? (
           <Select
             value={task.status}
