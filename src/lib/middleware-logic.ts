@@ -24,6 +24,10 @@ export function getRedirectTarget(pathname: string, role: string | undefined): s
   }
 
   if (!role) {
+    // Exempt NextAuth routes and webhooks from authentication
+    if (pathname.startsWith("/api/auth") || pathname.startsWith("/api/webhooks")) {
+      return null
+    }
     if (pathname.startsWith("/api/")) return "401"
     if (pathname.startsWith("/dashboard") || pathname.startsWith("/client-view")) return "/login"
     return null
