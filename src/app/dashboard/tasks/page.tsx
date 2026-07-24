@@ -239,7 +239,8 @@ export function TaskDashboard() {
 
         {role && canCreateTask(role) && (
           <Link href="/dashboard/tasks/new">
-            <Button size="icon" className="h-10 w-10 shrink-0 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all bg-primary text-primary-foreground">
+            <Button className="h-10 shrink-0 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all bg-primary text-primary-foreground flex items-center gap-2">
+              Create Task
               <Plus className="h-5 w-5" strokeWidth={2.5} />
             </Button>
           </Link>

@@ -37,7 +37,7 @@ export default function NewTaskPage() {
     title: "",
     description: "",
     assignedToId: "",
-    clientId: "",
+    clientIds: [] as string[],
     complianceItemId: "",
     dueDate: "",
   });
@@ -76,24 +76,28 @@ export default function NewTaskPage() {
     };
   }, [role]);
 
-  async function loadComplianceForClient(clientId: string | null) {
-    setForm(prev => ({ ...prev, clientId: clientId || "", complianceItemId: "" }));
-    if (!clientId || clientId === "none") {
-      setComplianceItems([]);
-      return;
-    }
-    try {
-      const res = await fetch(`/api/compliance?clientId=${clientId}&pageSize=100`);
-      if (res.ok) {
-        const data = await res.json();
-        setComplianceItems(data.data || []);
+  useEffect(() => {
+    async function updateCompliance() {
+      if (form.clientIds.length === 1) {
+        const cId = form.clientIds[0];
+        try {
+          const res = await fetch(`/api/compliance?clientId=${cId}&pageSize=100`);
+          if (res.ok) {
+            const data = await res.json();
+            setComplianceItems(data.data || []);
+          } else {
+            setComplianceItems([]);
+          }
+        } catch {
+          setComplianceItems([]);
+        }
       } else {
         setComplianceItems([]);
+        setForm(prev => ({ ...prev, complianceItemId: "" }));
       }
-    } catch {
-      setComplianceItems([]);
     }
-  }
+    updateCompliance();
+  }, [form.clientIds]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -105,22 +109,42 @@ export default function NewTaskPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: form.title,
-          description: form.description || null,
-          clientId: form.clientId === "none" ? null : form.clientId || null,
-          assignedToId: form.assignedToId,
-          complianceItemId: form.complianceItemId === "none" ? null : form.complianceItemId || null,
-          dueDate: form.dueDate || null,
-        }),
-      });
-
-      if (!res.ok) {
-        const _resData = await res.json();
-        throw new Error(_resData.error || "Failed to create task");
+      if (form.clientIds.length > 0) {
+        await Promise.all(form.clientIds.map(async (cId) => {
+          const res = await fetch("/api/tasks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: form.title,
+              description: form.description || null,
+              clientId: cId,
+              assignedToId: form.assignedToId,
+              complianceItemId: form.clientIds.length === 1 && form.complianceItemId !== "none" ? form.complianceItemId || null : null,
+              dueDate: form.dueDate || null,
+            }),
+          });
+          if (!res.ok) {
+            const _resData = await res.json();
+            throw new Error(_resData.error || "Failed to create task");
+          }
+        }));
+      } else {
+        const res = await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: form.title,
+            description: form.description || null,
+            clientId: null,
+            assignedToId: form.assignedToId,
+            complianceItemId: null,
+            dueDate: form.dueDate || null,
+          }),
+        });
+        if (!res.ok) {
+          const _resData = await res.json();
+          throw new Error(_resData.error || "Failed to create task");
+        }
       }
 
       router.push("/dashboard/tasks");
@@ -153,7 +177,7 @@ export default function NewTaskPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-slide-up">
+    <div className="max-w-5xl mx-auto space-y-6 animate-slide-up">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard/tasks')} className="rounded-full hover:bg-muted">
           <ArrowLeft className="h-5 w-5" />
@@ -164,8 +188,10 @@ export default function NewTaskPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="rounded-3xl bg-card p-6 md:p-8 space-y-8 border border-border shadow-sm relative overflow-hidden">
-        {/* Decorative background blur */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <form onSubmit={handleSubmit} className="lg:col-span-2 rounded-3xl bg-card p-6 md:p-8 space-y-8 border border-border shadow-sm relative overflow-hidden flex flex-col justify-between">
+          <div>
+            {/* Decorative background blur */}
         <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
 
         {error && (
@@ -241,35 +267,15 @@ export default function NewTaskPage() {
 
           <div className="space-y-2">
             <Label className="flex items-center gap-2 text-foreground font-semibold">
-              <Building className="h-4 w-4 text-blue-500" /> Client (Optional)
-            </Label>
-            <Select 
-              value={form.clientId} 
-              onValueChange={(v) => loadComplianceForClient(v)}
-            >
-              <SelectTrigger className="h-12 bg-background/50">
-                <SelectValue placeholder="None / Internal Task" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None / Internal Task</SelectItem>
-                {clients.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2 text-foreground font-semibold">
               <ShieldCheck className="h-4 w-4 text-emerald-500" /> Related Compliance Item (Optional)
             </Label>
             <Select 
               value={form.complianceItemId} 
               onValueChange={(v) => v && setForm({...form, complianceItemId: v})}
-              disabled={!form.clientId || form.clientId === "none" || complianceItems.length === 0} 
+              disabled={form.clientIds.length !== 1 || complianceItems.length === 0} 
             >
               <SelectTrigger className="h-12 bg-background/50">
-                <SelectValue placeholder={!form.clientId || form.clientId === "none" ? "Select a client first..." : "None"} />
+                <SelectValue placeholder={form.clientIds.length !== 1 ? "Select exactly one client first..." : "None"} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
@@ -280,8 +286,9 @@ export default function NewTaskPage() {
                 ))}
               </SelectContent>
             </Select>
-            {(!form.clientId || form.clientId === "none") && <p className="text-[11px] text-muted-foreground mt-1">You must select a client before linking a compliance item.</p>}
+            {form.clientIds.length !== 1 && <p className="text-[11px] text-muted-foreground mt-1">You must select exactly one client to link a compliance item.</p>}
           </div>
+        </div>
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-border/50 relative z-10">
@@ -299,7 +306,57 @@ export default function NewTaskPage() {
             )}
           </Button>
         </div>
-      </form>
+        </form>
+
+        <div className="lg:col-span-1 rounded-3xl bg-card p-6 border border-border shadow-sm flex flex-col max-h-[650px]">
+          <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Building className="h-4 w-4 text-blue-500" />
+            Select Clients
+          </h3>
+          <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+            <div
+              className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                form.clientIds.length === 0 ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
+              }`}
+              onClick={() => setForm({ ...form, clientIds: [] })}
+            >
+              <div className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center ${
+                form.clientIds.length === 0 ? "bg-primary border-primary text-primary-foreground" : "border-input bg-background"
+              }`}>
+                {form.clientIds.length === 0 && <CheckCircle2 className="h-3 w-3" />}
+              </div>
+              <span className="text-sm font-medium">None / Internal Task</span>
+            </div>
+            
+            {clients.map(c => {
+              const isSelected = form.clientIds.includes(c.id);
+              return (
+                <div
+                  key={c.id}
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                    isSelected ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
+                  }`}
+                  onClick={() => {
+                    setForm(prev => {
+                      const newIds = isSelected 
+                        ? prev.clientIds.filter(id => id !== c.id)
+                        : [...prev.clientIds, c.id];
+                      return { ...prev, clientIds: newIds };
+                    })
+                  }}
+                >
+                  <div className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center ${
+                    isSelected ? "bg-primary border-primary text-primary-foreground" : "border-input bg-background"
+                  }`}>
+                    {isSelected && <CheckCircle2 className="h-3 w-3" />}
+                  </div>
+                  <span className="text-sm">{c.name}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
