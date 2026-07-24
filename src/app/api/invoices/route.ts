@@ -27,9 +27,14 @@ function hashLockKey(str: string): number {
   return h >>> 0; // Convert to unsigned 32-bit
 }
 
-function buildInvoiceWhereClause(role: Role, userId: string, userClientId?: string | null, filterClientId?: string | null) {
+function buildInvoiceWhereClause(
+  role: Role,
+  userId: string,
+  userClientId?: string | null,
+  filterClientId?: string | null
+): Prisma.InvoiceWhereInput {
   if (role === ROLES.CLIENT) {
-    return { clientId: userClientId };
+    return { clientId: userClientId ?? undefined };
   }
   if (role === ROLES.ADMIN) {
     return filterClientId ? { clientId: filterClientId } : {};
