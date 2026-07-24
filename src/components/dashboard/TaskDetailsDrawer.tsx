@@ -167,7 +167,7 @@ export function TaskDetailsDrawer({
           {/* Body */}
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
             {/* Metadata */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <MetadataItem
                 icon={<Building2 className="h-4 w-4" />}
                 label="Client"

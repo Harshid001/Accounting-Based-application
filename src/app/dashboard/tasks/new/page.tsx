@@ -240,7 +240,9 @@ export default function NewTaskPage() {
                 required
               >
                 <SelectTrigger className="h-12 bg-background/50">
-                  <SelectValue placeholder="Select Assignee" />
+                  <SelectValue placeholder="Select Assignee">
+                    {form.assignedToId ? staff.find(s => s.id === form.assignedToId)?.name : null}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {staff.map(s => (
@@ -275,7 +277,15 @@ export default function NewTaskPage() {
               disabled={form.clientIds.length !== 1 || complianceItems.length === 0} 
             >
               <SelectTrigger className="h-12 bg-background/50">
-                <SelectValue placeholder={form.clientIds.length !== 1 ? "Select exactly one client first..." : "None"} />
+                <SelectValue placeholder={form.clientIds.length !== 1 ? "Select exactly one client first..." : "None"}>
+                  {form.complianceItemId && form.complianceItemId !== "none" 
+                    ? (() => {
+                        const c = complianceItems.find(item => item.id === form.complianceItemId);
+                        return c ? `${c.type} (${c.status}) - Due: ${new Date(c.dueDate).toLocaleDateString()}` : null;
+                      })()
+                    : form.complianceItemId === "none" ? "None" : null
+                  }
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>

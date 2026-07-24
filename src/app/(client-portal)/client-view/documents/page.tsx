@@ -171,43 +171,69 @@ export default function ClientDocumentsPage() {
         </div>
 
         {/* Document list */}
-        <div className="md:col-span-2 rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
+        <div className="md:col-span-2">
           {documents.length === 0 ? (
-            <div className="p-12 text-center text-muted-foreground">
+            <div className="rounded-xl border bg-card p-12 text-center text-muted-foreground shadow-sm">
               No documents uploaded yet.
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>File Name</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Mobile Cards */}
+              <div className="grid grid-cols-1 gap-4 md:hidden">
                 {documents.map((doc) => (
-                  <TableRow key={doc.id}>
-                    <TableCell className="font-medium">
-                      <div className="truncate max-w-[200px]" title={doc.fileName}>
-                        {doc.fileName}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{doc.type}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => handleDownloadDoc(doc.id)} className="h-8 w-8 text-primary">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleArchiveDoc(doc.id)} className="h-8 w-8 text-destructive hover:bg-destructive/10">
-                          <Archive className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <div key={doc.id} className="bg-card border border-border rounded-2xl shadow-sm p-4 flex flex-col gap-3 relative overflow-hidden transition-shadow duration-200 hover:shadow-md">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-bold text-foreground text-base truncate" title={doc.fileName}>{doc.fileName}</span>
+                      <span className="text-xs font-semibold text-primary">{doc.type}</span>
+                    </div>
+                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/50">
+                      <Button variant="outline" size="sm" onClick={() => handleDownloadDoc(doc.id)} className="h-8">
+                        <Download className="mr-1.5 h-3.5 w-3.5" />
+                        Download
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleArchiveDoc(doc.id)} className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0">
+                        <Archive className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+
+              {/* Desktop Table */}
+              <div className="hidden md:block rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>File Name</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {documents.map((doc) => (
+                      <TableRow key={doc.id} className="transition-colors duration-150 hover:bg-muted/30">
+                        <TableCell className="font-medium">
+                          <div className="truncate max-w-[200px]" title={doc.fileName}>
+                            {doc.fileName}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{doc.type}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleDownloadDoc(doc.id)} className="h-8 w-8 text-primary">
+                              <Download className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleArchiveDoc(doc.id)} className="h-8 w-8 text-destructive hover:bg-destructive/10">
+                              <Archive className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </div>
       </div>

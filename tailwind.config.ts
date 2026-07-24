@@ -1,5 +1,6 @@
 import type { Config } from "tailwindcss"
 import tailwindcssAnimate from "tailwindcss-animate"
+import defaultTheme from "tailwindcss/defaultTheme"
 
 const config: Config = {
   darkMode: ["class"],
@@ -10,6 +11,11 @@ const config: Config = {
     './src/lib/**/*.{ts,tsx}',
   ],
   theme: {
+    screens: {
+      'xs': '375px',
+      ...defaultTheme.screens,
+      '3xl': '1920px',
+    },
     extend: {
       colors: {
         background: "hsl(var(--background))",
