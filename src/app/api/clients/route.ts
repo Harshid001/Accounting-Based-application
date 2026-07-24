@@ -30,9 +30,29 @@ export const GET = withAuth(async (req: NextRequest, { user }) => {
   const filters = clientFiltersSchema.parse({
     page: searchParams.get("page") ?? undefined,
     pageSize: searchParams.get("pageSize") ?? undefined,
+    status: searchParams.get("status") ?? undefined,
+    search: searchParams.get("search") ?? undefined,
+    type: searchParams.get("type") ?? undefined,
   });
 
-  const whereClause = buildClientWhereClause(userRole, userId);
+  const baseWhere = buildClientWhereClause(userRole, userId);
+
+  const search = filters.search?.trim();
+  const searchConditions = search
+    ? {
+        OR: [
+          { name: { contains: search, mode: "insensitive" as const } },
+          { email: { contains: search, mode: "insensitive" as const } },
+          { pan: { contains: search, mode: "insensitive" as const } },
+          { gstin: { contains: search, mode: "insensitive" as const } },
+        ],
+      }
+    : {};
+
+  const statusFilter = filters.status ? { status: filters.status } : {};
+  const typeFilter = filters.type ? { type: filters.type } : {};
+
+  const whereClause = { ...baseWhere, ...searchConditions, ...statusFilter, ...typeFilter };
 
   const [clients, total] = await Promise.all([
     prisma.client.findMany({

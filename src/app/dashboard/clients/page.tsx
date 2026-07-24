@@ -6,7 +6,7 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Plus, Search, Download, Pin, PinOff, Trash2, Building2, Users, UserCheck, UserPlus } from "lucide-react"
+import { Loader2, Plus, Search, Download, Pin, PinOff, Trash2, Pencil, Building2, Users, UserCheck, UserPlus, ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface AssignedUser {
@@ -53,6 +53,24 @@ function getStatusVariant(status: string) {
   }
 }
 
+function getTypeVariant(type: string) {
+  switch (type) {
+    case "BUSINESS":
+      return "default"
+    case "INDIVIDUAL":
+      return "secondary"
+    default:
+      return "outline"
+  }
+}
+
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return "?"
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
+}
+
 function escapeCsv(field: unknown): string {
   const s = String(field ?? "")
   return `"${s.replace(/"/g, '""')}"`
@@ -68,11 +86,23 @@ export default function ClientsPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL")
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize] = useState(10)
 
   useEffect(() => {
     const fetchClients = async () => {
+      setLoading(true)
       try {
-        const res = await fetch("/api/clients?pageSize=100", {
+        const params = new URLSearchParams({
+          pageSize: String(pageSize),
+          page: String(page),
+        })
+        const q = searchQuery.trim()
+        if (q) params.set("search", q)
+        if (statusFilter !== "ALL") params.set("status", statusFilter)
+        if (typeFilter !== "ALL") params.set("type", typeFilter)
+
+        const res = await fetch(`/api/clients?${params.toString()}`, {
           headers: {
             "Cache-Control": "no-cache, no-store, must-revalidate",
             Pragma: "no-cache",
@@ -93,8 +123,13 @@ export default function ClientsPage() {
         setLoading(false)
       }
     }
-    fetchClients()
-  }, [])
+
+    const debounceTimer = setTimeout(() => {
+      fetchClients()
+    }, 300)
+
+    return () => clearTimeout(debounceTimer)
+  }, [searchQuery, statusFilter, typeFilter, page, pageSize])
 
   const handleTogglePin = async (client: Client) => {
     setProcessingId(client.id)
@@ -162,64 +197,72 @@ export default function ClientsPage() {
     }
   }
 
-  const handleExport = () => {
-    const headers = [
-      "Name",
-      "Type",
-      "Status",
-      "Email",
-      "Phone",
-      "PAN",
-      "GSTIN",
-      "Assigned To",
-      "Created",
-    ]
-    const rows = filteredClients.map((c) => [
-      c.name,
-      c.type,
-      c.status,
-      c.email || "",
-      c.phone || "",
-      c.pan || "",
-      c.gstin || "",
-      c.assignedTo.map((u) => u.name).join("; "),
-      new Date(c.createdAt).toLocaleDateString(),
-    ])
-    const csv = [headers, ...rows]
-      .map((r) => r.map(escapeCsv).join(","))
-      .join("\n")
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `clients-${new Date().toISOString().split("T")[0]}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+  const handleExport = async () => {
+    try {
+      const params = new URLSearchParams({
+        pageSize: "100",
+        page: "1",
+      })
+      const q = searchQuery.trim()
+      if (q) params.set("search", q)
+      if (statusFilter !== "ALL") params.set("status", statusFilter)
+      if (typeFilter !== "ALL") params.set("type", typeFilter)
+
+      const res = await fetch(`/api/clients?${params.toString()}`, {
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      })
+      if (!res.ok) {
+        setError("Failed to fetch clients for export")
+        return
+      }
+      const json = await res.json()
+      const exportClients: Client[] = json.data || json
+
+      const headers = [
+        "Name",
+        "Type",
+        "Status",
+        "Email",
+        "Phone",
+        "PAN",
+        "GSTIN",
+        "Assigned To",
+        "Created",
+      ]
+      const rows = exportClients.map((c) => [
+        c.name,
+        c.type,
+        c.status,
+        c.email || "",
+        c.phone || "",
+        c.pan || "",
+        c.gstin || "",
+        c.assignedTo.map((u) => u.name).join("; "),
+        new Date(c.createdAt).toLocaleDateString(),
+      ])
+      const csv = [headers, ...rows]
+        .map((r) => r.map(escapeCsv).join(","))
+        .join("\n")
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `clients-${new Date().toISOString().split("T")[0]}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError("Failed to export clients")
+    }
   }
 
-  const filteredClients = (() => {
-    const q = searchQuery.trim().toLowerCase()
-    return clients
-      .filter((c) => {
-        const matchesSearch =
-          !q ||
-          c.name.toLowerCase().includes(q) ||
-          (c.email?.toLowerCase().includes(q) ?? false) ||
-          (c.pan?.toLowerCase().includes(q) ?? false) ||
-          (c.gstin?.toLowerCase().includes(q) ?? false)
-        const matchesStatus = statusFilter === "ALL" || c.status === statusFilter
-        const matchesType = typeFilter === "ALL" || c.type === typeFilter
-        return matchesSearch && matchesStatus && matchesType
-      })
-      .sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1
-        if (!a.isPinned && b.isPinned) return 1
-        return 0
-      })
-  })()
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   const stats = (() => ({
-    total: clients.length,
+    total: total,
     active: clients.filter((c) => c.status === "ACTIVE").length,
     onboarding: clients.filter((c) => c.status === "ONBOARDING").length,
     inactive: clients.filter((c) => c.status === "INACTIVE").length,
@@ -236,9 +279,9 @@ export default function ClientsPage() {
 
   const statCards = [
     { label: "Total Clients", value: stats.total, icon: Building2, accent: "text-primary" },
-    { label: "Active", value: stats.active, icon: UserCheck, accent: "text-green-500" },
-    { label: "Onboarding", value: stats.onboarding, icon: UserPlus, accent: "text-amber-500" },
-    { label: "Inactive", value: stats.inactive, icon: Users, accent: "text-muted-foreground" },
+    { label: "Active (page)", value: stats.active, icon: UserCheck, accent: "text-green-500" },
+    { label: "Onboarding (page)", value: stats.onboarding, icon: UserPlus, accent: "text-amber-500" },
+    { label: "Inactive (page)", value: stats.inactive, icon: Users, accent: "text-muted-foreground" },
   ]
 
   return (
@@ -257,7 +300,7 @@ export default function ClientsPage() {
             variant="outline"
             size="sm"
             onClick={handleExport}
-            disabled={filteredClients.length === 0}
+            disabled={total === 0}
             className="h-9"
           >
             <Download className="h-4 w-4 mr-2" />
@@ -307,11 +350,11 @@ export default function ClientsPage() {
             type="text"
             placeholder="Search by name, email, PAN, GSTIN..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setPage(1) }}
             className="w-full h-9 pl-9 pr-4 rounded-xl border border-input bg-background text-sm outline-none transition-all focus:border-primary focus:ring-1 focus:ring-primary"
           />
         </div>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v as StatusFilter); setPage(1) }}>
           <SelectTrigger className="w-full sm:w-[160px] h-9">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -324,7 +367,7 @@ export default function ClientsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
+        <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v as TypeFilter); setPage(1) }}>
           <SelectTrigger className="w-full sm:w-[160px] h-9">
             <SelectValue placeholder="Type" />
           </SelectTrigger>
@@ -349,13 +392,14 @@ export default function ClientsPage() {
           <>
             <div className="flex items-center justify-between mb-3 px-1">
               <p className="text-xs text-muted-foreground">
-                Showing {filteredClients.length} of {total} client{total === 1 ? "" : "s"}
+                Showing {clients.length} of {total} client{total === 1 ? "" : "s"}
+                {totalPages > 1 && ` · Page ${page} of ${totalPages}`}
               </p>
             </div>
 
             {/* Mobile Cards */}
             <div className="grid grid-cols-1 gap-4 md:hidden">
-              {filteredClients.length === 0 ? (
+              {clients.length === 0 ? (
                 <div className="bg-card border border-border rounded-2xl shadow-sm flex flex-col items-center justify-center py-16 gap-3 text-center">
                   <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
                     <Search className="h-5 w-5 text-muted-foreground" />
@@ -363,7 +407,7 @@ export default function ClientsPage() {
                   <p className="text-sm font-medium text-foreground">No clients match your filters</p>
                   <p className="text-xs text-muted-foreground">Try adjusting your search or filters.</p>
                 </div>
-              ) : filteredClients.map((client) => (
+              ) : clients.map((client) => (
                 <div
                   key={client.id}
                   className="bg-card border border-border rounded-2xl shadow-sm p-4 flex flex-col gap-3 relative overflow-hidden hover:shadow-md transition-shadow duration-200"
@@ -379,7 +423,9 @@ export default function ClientsPage() {
                           <span className="font-bold text-foreground text-base leading-tight truncate">
                             {client.name}
                           </span>
-                          <span className="text-xs font-medium text-muted-foreground">{client.type}</span>
+                          <Badge variant={getTypeVariant(client.type) as "default" | "secondary" | "destructive" | "success" | "warning" | "outline"} className="w-fit">
+                            {client.type}
+                          </Badge>
                         </div>
                       </div>
                     </div>
@@ -393,13 +439,25 @@ export default function ClientsPage() {
                   )}
 
                   <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/50">
-                    <div className="flex flex-col min-w-0">
+                    <div className="flex flex-col min-w-0 gap-1">
                       <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
                         Assigned To
                       </span>
-                      <span className="text-sm font-medium text-foreground truncate">
-                        {client.assignedTo.map((u) => u.name).join(", ") || "-"}
-                      </span>
+                      {client.assignedTo.length > 0 ? (
+                        <div className="flex -space-x-2">
+                          {client.assignedTo.map((u) => (
+                            <div
+                              key={u.id}
+                              title={u.name}
+                              className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-[10px] border-2 border-card ring-1 ring-border/50 shrink-0"
+                            >
+                              {getInitials(u.name)}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm font-medium text-foreground">-</span>
+                      )}
                     </div>
                     <div className="flex flex-col items-end">
                       <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
@@ -429,6 +487,9 @@ export default function ClientsPage() {
                   </div>
 
                   <div className="pt-3 border-t border-border/50 mt-1 flex items-center justify-between gap-2">
+                    <Link href={`/dashboard/clients/${client.id}`} className={buttonVariants({ variant: "secondary", size: "sm" })}>
+                      View Details
+                    </Link>
                     <div className="flex items-center gap-2">
                       <Button
                         variant="ghost"
@@ -439,6 +500,12 @@ export default function ClientsPage() {
                       >
                         {client.isPinned ? <PinOff className="h-4 w-4 text-amber-500" /> : <Pin className="h-4 w-4" />}
                       </Button>
+                      <Link
+                        href={`/dashboard/clients/${client.id}/edit`}
+                        className={buttonVariants({ variant: "ghost", size: "icon", className: "h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10" })}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Link>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -449,9 +516,6 @@ export default function ClientsPage() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                    <Link href={`/dashboard/clients/${client.id}`} className={buttonVariants({ variant: "secondary", size: "sm" })}>
-                      View Details
-                    </Link>
                   </div>
                 </div>
               ))}
@@ -478,14 +542,17 @@ export default function ClientsPage() {
                       Assigned To
                     </TableHead>
                     <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      View Details
+                    </TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Actions
                     </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredClients.length === 0 ? (
+                  {clients.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-12 text-sm text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-12 text-sm text-muted-foreground">
                         <div className="flex flex-col items-center gap-3">
                           <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
                             <Search className="h-5 w-5 text-muted-foreground" />
@@ -497,7 +564,7 @@ export default function ClientsPage() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ) : filteredClients.map((client) => (
+                  ) : clients.map((client) => (
                     <TableRow key={client.id} className="transition-colors duration-150 hover:bg-muted/30 border-b border-border/50">
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-3">
@@ -513,7 +580,11 @@ export default function ClientsPage() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>{client.type}</TableCell>
+                      <TableCell>
+                        <Badge variant={getTypeVariant(client.type) as "default" | "secondary" | "destructive" | "success" | "warning" | "outline"}>
+                          {client.type}
+                        </Badge>
+                      </TableCell>
                       <TableCell>
                         <Select
                           value={client.status}
@@ -534,10 +605,29 @@ export default function ClientsPage() {
                       </TableCell>
                       <TableCell>{client.pan || "-"}</TableCell>
                       <TableCell>
-                        {client.assignedTo.map((u) => u.name).join(", ") || "-"}
+                        {client.assignedTo.length > 0 ? (
+                          <div className="flex -space-x-2">
+                            {client.assignedTo.map((u) => (
+                              <div
+                                key={u.id}
+                                title={u.name}
+                                className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-[10px] border-2 border-card ring-1 ring-border/50 shrink-0"
+                              >
+                                {getInitials(u.name)}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          "-"
+                        )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        <Link href={`/dashboard/clients/${client.id}`} className={buttonVariants({ variant: "link", className: "p-0 h-auto text-primary" })}>
+                          View Details
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -547,6 +637,12 @@ export default function ClientsPage() {
                           >
                             {client.isPinned ? <PinOff className="h-4 w-4 text-amber-500" /> : <Pin className="h-4 w-4" />}
                           </Button>
+                          <Link
+                            href={`/dashboard/clients/${client.id}/edit`}
+                            className={buttonVariants({ variant: "ghost", size: "icon", className: "h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10" })}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Link>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -556,9 +652,6 @@ export default function ClientsPage() {
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
-                          <Link href={`/dashboard/clients/${client.id}`} className={buttonVariants({ variant: "link", className: "p-0 h-auto text-primary ml-2" })}>
-                            View Details
-                          </Link>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -566,6 +659,37 @@ export default function ClientsPage() {
                 </TableBody>
               </Table>
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between gap-2 pt-2">
+                <p className="text-xs text-muted-foreground">
+                  Page {page} of {totalPages}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="h-9"
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="h-9"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

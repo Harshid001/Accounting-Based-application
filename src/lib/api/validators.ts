@@ -111,6 +111,7 @@ export const invoiceFiltersSchema = paginationSchema.extend({
 export const clientFiltersSchema = paginationSchema.extend({
   status: z.preprocess(nullToUndefined, z.enum(["ACTIVE", "INACTIVE", "ONBOARDING"]).optional()),
   search: z.preprocess(nullToUndefined, z.string().optional()),
+  type: z.preprocess(nullToUndefined, z.enum(["INDIVIDUAL", "BUSINESS"]).optional()),
 });
 
 export const commentFiltersSchema = paginationSchema.extend({
