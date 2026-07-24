@@ -54,7 +54,7 @@ async function authMiddleware(request: NextRequest, token: any) {
   return NextResponse.next();
 }
 
-export async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const requestId = getOrCreateRequestId(request);
   const log = logger.child({ requestId });
   const start = Date.now();
