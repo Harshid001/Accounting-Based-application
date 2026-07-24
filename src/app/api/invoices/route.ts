@@ -9,7 +9,7 @@ type Role = typeof ROLES[keyof typeof ROLES];
 
 async function generateInvoiceNumber(year: string): Promise<{ seq: number; invoiceNumber: string }> {
   const lockKey = Number(hashLockKey(`afms:invoice:seq:${year}`));
-  await prisma.$queryRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
+  await prisma.$queryRaw`SELECT CAST(pg_advisory_xact_lock(${lockKey}) AS text)`;
   const counter = await prisma.invoiceCounter.upsert({
     where: { id: year },
     create: { id: year, seq: 1 },
@@ -27,15 +27,15 @@ function hashLockKey(str: string): number {
   return h >>> 0; // Convert to unsigned 32-bit
 }
 
-function buildInvoiceWhereClause(role: Role, userId: string, clientId?: string | null) {
+function buildInvoiceWhereClause(role: Role, userId: string, userClientId?: string | null, filterClientId?: string | null) {
   if (role === ROLES.CLIENT) {
-    return { clientId: userId };
+    return { clientId: userClientId };
   }
   if (role === ROLES.ADMIN) {
-    return clientId ? { clientId } : {};
+    return filterClientId ? { clientId: filterClientId } : {};
   }
-  if (clientId) {
-    return { clientId, client: { assignedTo: { some: { id: userId } } } };
+  if (filterClientId) {
+    return { clientId: filterClientId, client: { assignedTo: { some: { id: userId } } } };
   }
   return { client: { assignedTo: { some: { id: userId } } } };
 }
@@ -132,6 +132,7 @@ export const POST = withAuth(async (req: NextRequest, { user }) => {
 
     return NextResponse.json(invoice, { status: 201 });
   } catch (creationError: unknown) {
+    console.error("DEBUG ERROR", creationError);
     const errorMessage = creationError instanceof Error ? creationError.message : "Unknown error";
     console.error(`[InvoiceCreationError] Failed to create invoice ${invoiceNumber}, attempting VOID stub fallback:`, creationError);
 
@@ -180,13 +181,20 @@ export const GET = withAuth(async (req: NextRequest, { user }) => {
   const { searchParams } = new URL(req.url);
 
   const filters = invoiceFiltersSchema.parse({
-    page: searchParams.get("page"),
-    pageSize: searchParams.get("pageSize"),
-    clientId: searchParams.get("clientId"),
-    status: searchParams.get("status"),
+    page: searchParams.get("page") ?? undefined,
+    pageSize: searchParams.get("pageSize") ?? undefined,
+    clientId: searchParams.get("clientId") ?? undefined,
+    status: searchParams.get("status") ?? undefined,
   });
 
-  const whereClause = buildInvoiceWhereClause(userRole, userId, filters.clientId ?? undefined);
+  if (filters.clientId) {
+    const hasAccess = await checkClientAccess(filters.clientId, userId, userRole);
+    if (!hasAccess) {
+      return NextResponse.json({ error: "Forbidden: Not assigned to this client" }, { status: 403 });
+    }
+  }
+
+  const whereClause = buildInvoiceWhereClause(userRole, userId, (user as any).clientId, filters.clientId ?? undefined);
   if (filters.status) {
     Object.assign(whereClause, { status: filters.status });
   }

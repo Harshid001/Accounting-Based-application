@@ -41,7 +41,7 @@ export function withAuth(
 ): (req: NextRequest) => Promise<NextResponse> {
   return async (req: NextRequest) => {
     const requestId = crypto.randomUUID();
-    const log = logger.child({ requestId, path: req.nextUrl.pathname });
+    const log = logger.child({ requestId, path: req.url ? new URL(req.url).pathname : "unknown" });
     const start = Date.now();
 
     try {
@@ -89,10 +89,15 @@ export function withAuth(
 
       return response;
     } catch (error) {
+      console.error("WITHAUTH ERROR", error);
       const duration = Date.now() - start;
       log.error({ err: error, durationMs: duration }, "request failed");
 
-      if (isValidationError(error)) {
+      if (error instanceof Error && error.message.startsWith("FORBIDDEN:")) {
+        return NextResponse.json({ error: error.message }, { status: 403 });
+      }
+
+      if (isValidationError(error) || (error instanceof Error && error.name === "ZodError")) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
 

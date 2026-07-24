@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { withAuth, type AuthenticatedUser } from "@/lib/api/withAuth";
 import { prisma } from "@/lib/prisma";
 import { ROLES } from "@/lib/permissions";
 import { Prisma } from "@prisma/client";
@@ -23,73 +22,55 @@ async function checkClientAccess(clientId: string, userId: string, role: string)
   return !!client?.assignedTo.some((u) => u.id === userId);
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const GET = withAuth(async (req: NextRequest, { user, prisma }) => {
+  const url = new URL(req.url);
+  const segments = url.pathname.split("/");
+  // Path: /api/clients/<id>
+  const id = segments[segments.length - 1];
 
-    const { id } = await params;
-    const { id: userId, role } = session.user;
-
-    const hasAccess = await checkClientAccess(id, userId, role);
-    if (!hasAccess) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const client = await prisma.client.findUnique({
-      where: { id },
-      include: {
-        assignedTo: { select: { id: true, name: true, email: true, role: true } },
-        services: { include: { service: true } },
-      },
-    });
-
-    if (!client) {
-      return NextResponse.json({ error: "Client not found" }, { status: 404 });
-    }
-
-    return NextResponse.json(client);
-  } catch (error) {
-    console.error("[CLIENTS_GET]", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  const hasAccess = await checkClientAccess(id, user.id, user.role);
+  if (!hasAccess) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-}
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+  const client = await prisma.client.findUnique({
+    where: { id },
+    include: {
+      assignedTo: { select: { id: true, name: true, email: true, role: true } },
+      services: { include: { service: true } },
+    },
+  });
+
+  if (!client) {
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(client);
+});
+
+export const PATCH = withAuth(async (req: NextRequest, { user, prisma }) => {
+  const url = new URL(req.url);
+  const segments = url.pathname.split("/");
+  const id = segments[segments.length - 1];
+
+  const hasAccess = await checkClientAccess(id, user.id, user.role);
+  if (!hasAccess) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = await req.json();
+  const { assignedToIds, ...otherFields } = validateBody(body, updateClientSchema);
+
+  const updateData: Record<string, unknown> = { ...otherFields };
+
+  if (assignedToIds !== undefined) {
+    if (!isLeadership(user.role)) {
+      return NextResponse.json({ error: "Forbidden - Cannot reassign staff" }, { status: 403 });
+    }
+    updateData.assignedTo = { set: assignedToIds.map((uid: string) => ({ id: uid })) };
+  }
+
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id } = await params;
-    const { id: userId, role } = session.user;
-
-    const hasAccess = await checkClientAccess(id, userId, role);
-    if (!hasAccess) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const body = await req.json();
-    const { assignedToIds, ...otherFields } = validateBody(body, updateClientSchema);
-
-    const updateData: Record<string, unknown> = { ...otherFields };
-
-    if (assignedToIds !== undefined) {
-      if (!isLeadership(role)) {
-        return NextResponse.json({ error: "Forbidden - Cannot reassign staff" }, { status: 403 });
-      }
-      updateData.assignedTo = { set: assignedToIds.map((uid: string) => ({ id: uid })) };
-    }
-
     const client = await prisma.client.update({
       where: { id },
       data: updateData,
@@ -100,9 +81,6 @@ export async function PATCH(
 
     return NextResponse.json(client);
   } catch (error) {
-    if (isValidationError(error)) {
-      return NextResponse.json({ error: (error as Error).message }, { status: 400 });
-    }
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2002") {
         return NextResponse.json({ error: "Unique constraint violation" }, { status: 409 });
@@ -111,34 +89,22 @@ export async function PATCH(
         return NextResponse.json({ error: "Record not found" }, { status: 404 });
       }
     }
-    if (error instanceof SyntaxError) {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-    }
-    console.error("[CLIENTS_PATCH]", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    throw error;
   }
-}
+});
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (req: NextRequest, { user, prisma }) => {
+  const url = new URL(req.url);
+  const segments = url.pathname.split("/");
+  const id = segments[segments.length - 1];
+
+  const hasAccess = await checkClientAccess(id, user.id, user.role);
+  if (!hasAccess || !isLeadership(user.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id } = await params;
-    const { id: userId, role } = session.user;
-
-    const hasAccess = await checkClientAccess(id, userId, role);
-    if (!hasAccess || !isLeadership(role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     await prisma.client.delete({ where: { id } });
-
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -146,7 +112,6 @@ export async function DELETE(
         return NextResponse.json({ error: "Record not found" }, { status: 404 });
       }
     }
-    console.error("[CLIENTS_DELETE]", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    throw error;
   }
-}
+});

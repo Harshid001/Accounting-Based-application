@@ -2,6 +2,18 @@ import { Notification, User, ComplianceItem } from "@prisma/client";
 import { sendEmail } from "./email";
 
 /**
+ * Escapes HTML special characters to prevent XSS in email clients.
+ */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
  * Delivers a notification via the configured channels (Email, Push, In-App).
  * This service ensures channels are kept separate and explicitly handled.
  */
@@ -43,14 +55,19 @@ export async function deliverNotification(
 }
 
 async function sendComplianceEmail(email: string, notification: Notification, item: ComplianceItem) {
+  const safeType = escapeHtml(String(item.type));
+  const safeDueDate = escapeHtml(item.dueDate.toLocaleDateString());
+  const safeStatus = escapeHtml(String(item.status));
+  const safeNotes = item.notes ? escapeHtml(item.notes) : null;
+
   const subject = `AFMS — Compliance Deadline: ${item.type}`;
   const html = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #1a1a2e;">Compliance Deadline Approaching</h2>
-      <p>A <strong>${item.type}</strong> compliance item is due on
-         <strong>${item.dueDate.toLocaleDateString()}</strong>.</p>
-      <p>Current status: <strong>${item.status}</strong></p>
-      ${item.notes ? `<p>Notes: ${item.notes}</p>` : ""}
+      <p>A <strong>${safeType}</strong> compliance item is due on
+         <strong>${safeDueDate}</strong>.</p>
+      <p>Current status: <strong>${safeStatus}</strong></p>
+      ${safeNotes ? `<p>Notes: ${safeNotes}</p>` : ""}
       <hr style="border: none; border-top: 1px solid #eee;" />
       <p style="color: #666; font-size: 12px;">
         This is an automated notification from AFMS. Please log in to take action.
@@ -60,3 +77,4 @@ async function sendComplianceEmail(email: string, notification: Notification, it
 
   await sendEmail({ to: email, subject, html });
 }
+

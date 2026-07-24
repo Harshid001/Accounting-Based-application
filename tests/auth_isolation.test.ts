@@ -60,16 +60,20 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
     setMockSession({ user: { id: adminUser.id, role: "ADMIN" } });
     const resA = await createInvoice({
       json: async () => ({ clientId: clientA.id, dueDate: new Date(Date.now() + 864e5).toISOString(), lineItems }),
-      headers: new Headers({})
+      headers: new Headers({}),
+      url: "http://localhost/api/invoices"
     } as unknown as NextRequest);
     invoiceA = await resA.json();
+    if (resA.status !== 201) console.log("RES A:", invoiceA);
 
     // Create invoice for clientB (as admin)
     const resB = await createInvoice({
       json: async () => ({ clientId: clientB.id, dueDate: new Date(Date.now() + 864e5).toISOString(), lineItems }),
-      headers: new Headers({})
+      headers: new Headers({}),
+      url: "http://localhost/api/invoices"
     } as unknown as NextRequest);
     invoiceB = await resB.json();
+    if (resB.status !== 201) console.log("RES B:", invoiceB);
   }, 30000);
 
   afterEach(() => clearMockSession());
@@ -83,7 +87,8 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
 
   it("CLIENT A cannot fetch CLIENT B's invoice by ID → 403", async () => {
     setMockSession({ user: { id: clientAUser.id, role: "CLIENT", clientId: clientA.id } });
-    const res = await getInvoice({} as unknown as NextRequest, { params: Promise.resolve({ id: invoiceB.id }) } as unknown as IdParams);
+    const req = { url: `http://localhost/api/invoices/${invoiceB.id}` } as unknown as NextRequest;
+    const res = await getInvoice(req);
     expect(res.status).toBe(403);
   });
 
@@ -121,7 +126,8 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
 
   it("ACCOUNTANT assigned to A cannot fetch CLIENT B's invoice by ID → 403", async () => {
     setMockSession({ user: { id: accountantA.id, role: "ACCOUNTANT" } });
-    const res = await getInvoice({} as unknown as NextRequest, { params: Promise.resolve({ id: invoiceB.id }) } as unknown as IdParams);
+    const req = { url: `http://localhost/api/invoices/${invoiceB.id}` } as unknown as NextRequest;
+    const res = await getInvoice(req);
     expect(res.status).toBe(403);
   });
 
@@ -143,7 +149,8 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
 
   it("ACCOUNTANT can fetch their own assigned client's invoice by ID → 200", async () => {
     setMockSession({ user: { id: accountantA.id, role: "ACCOUNTANT" } });
-    const res = await getInvoice({} as unknown as NextRequest, { params: Promise.resolve({ id: invoiceA.id }) } as unknown as IdParams);
+    const req = { url: `http://localhost/api/invoices/${invoiceA.id}` } as unknown as NextRequest;
+    const res = await getInvoice(req);
     expect(res.status).toBe(200);
   });
 
@@ -151,10 +158,8 @@ describe("Authorization Isolation (authentication ≠ authorization)", () => {
 
   it("DATA_ENTRY cannot record payment → 403", async () => {
     setMockSession({ user: { id: dataEntryUser.id, role: "DATA_ENTRY" } });
-    const res = await createPayment(
-      { json: async () => ({ amount: 100, method: "CASH" }), headers: new Headers({}) } as unknown as NextRequest,
-      { params: Promise.resolve({ id: invoiceA.id }) } as unknown as IdParams
-    );
+    const req = { json: async () => ({ amount: 100, method: "CASH" }), headers: new Headers({}), url: `http://localhost/api/invoices/${invoiceA.id}/payments` } as unknown as NextRequest;
+    const res = await createPayment(req);
     expect(res.status).toBe(403);
   });
 

@@ -1,37 +1,25 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
+import { withAuth } from "@/lib/api/withAuth";
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+export const GET = withAuth(async (req: NextRequest, { user, prisma }) => {
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
     select: { id: true, name: true, email: true, phone: true, role: true, image: true },
   });
 
-  if (!user) {
+  if (!dbUser) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json(user);
-}
+  return NextResponse.json(dbUser);
+});
 
-export async function PATCH(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const PATCH = withAuth(async (req: NextRequest, { user, prisma }) => {
   const body = await req.json();
   const { name, email, phone } = body as { name?: string; email?: string; phone?: string };
 
   const updated = await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: user.id },
     data: {
       ...(name !== undefined && { name }),
       ...(email !== undefined && { email }),
@@ -41,4 +29,4 @@ export async function PATCH(req: Request) {
   });
 
   return NextResponse.json(updated);
-}
+});

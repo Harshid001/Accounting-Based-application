@@ -62,29 +62,30 @@ describe("Billing & Invoicing API", () => {
 
   it("should reject unauthenticated invoice creation (401)", async () => {
     setMockSession(null);
-    const req = { json: async () => getPayload(client.id), headers: new Headers({}) } as unknown as NextRequest;
+    const req = { json: async () => getPayload(client.id), headers: new Headers({}), url: "http://localhost/api/invoices" } as unknown as NextRequest;
     const res = await createInvoice(req);
     expect(res.status).toBe(401);
   });
 
   it("should reject invoice creation for unassigned staff", async () => {
     setMockSession({ user: { id: unassignedStaff.id, role: "ACCOUNTANT" } });
-    const req = { json: async () => getPayload(client.id), headers: new Headers({}) } as unknown as NextRequest;
+    const req = { json: async () => getPayload(client.id), headers: new Headers({}), url: "http://localhost/api/invoices" } as unknown as NextRequest;
     const res = await createInvoice(req);
     expect(res.status).toBe(403);
   });
 
   it("should reject invoice creation for CLIENT role", async () => {
     setMockSession({ user: { id: "some-client-id", role: "CLIENT" } });
-    const req = { json: async () => getPayload(client.id), headers: new Headers({}) } as unknown as NextRequest;
+    const req = { json: async () => getPayload(client.id), headers: new Headers({}), url: "http://localhost/api/invoices" } as unknown as NextRequest;
     const res = await createInvoice(req);
     expect(res.status).toBe(403);
   });
 
   it("should create invoice ignoring malicious total, generating correct INV- number", async () => {
     setMockSession({ user: { id: assignedStaff.id, role: "ACCOUNTANT" } });
-    const req = { json: async () => getPayload(client.id), headers: new Headers({}) } as unknown as NextRequest;
+    const req = { json: async () => getPayload(client.id), headers: new Headers({}), url: "http://localhost/api/invoices" } as unknown as NextRequest;
     const res = await createInvoice(req);
+    console.log(await res.clone().json().catch(async () => await res.clone().text()));
     expect(res.status).toBe(201);
     const invoice = await res.json();
     expect(invoice.invoiceNumber).toMatch(/^INV-\d{4}-\d{4}$/);
@@ -94,13 +95,14 @@ describe("Billing & Invoicing API", () => {
   it("should successfully fetch GET invoice", async () => {
     // Create invoice as ADMIN
     setMockSession({ user: { id: assignedStaff.id, role: "ADMIN" } });
-    const createReq = { json: async () => getPayload(client.id), headers: new Headers({}) } as unknown as NextRequest;
+    const createReq = { json: async () => getPayload(client.id), headers: new Headers({}), url: "http://localhost/api/invoices" } as unknown as NextRequest;
     const createRes = await createInvoice(createReq);
     const invoice = await createRes.json();
 
     // Fetch it
     setMockSession({ user: { id: assignedStaff.id, role: "ACCOUNTANT" } });
-    const getRes = await getInvoice({} as unknown as NextRequest, { params: Promise.resolve({ id: invoice.id }) } as unknown as IdParams);
+    const req = { url: `http://localhost/api/invoices/${invoice.id}` } as unknown as NextRequest;
+    const getRes = await getInvoice(req);
     expect(getRes.status).toBe(200);
     const fetchedInvoice = await getRes.json();
     expect(fetchedInvoice.invoiceNumber).toBe(invoice.invoiceNumber);
@@ -113,22 +115,22 @@ describe("Billing & Invoicing API", () => {
     beforeEach(async () => {
       // Create fresh invoice as ADMIN for each payment test
       setMockSession({ user: { id: assignedStaff.id, role: "ADMIN" } });
-      const req = { json: async () => getPayload(client.id), headers: new Headers({}) } as unknown as NextRequest;
+      const req = { json: async () => getPayload(client.id), headers: new Headers({}), url: "http://localhost/api/invoices" } as unknown as NextRequest;
       const res = await createInvoice(req);
       activeInvoice = await res.json();
     });
 
     it("should reject unauthenticated payment (401)", async () => {
       setMockSession(null);
-      const req = { json: async () => ({ amount: 100, method: "CASH" }), headers: new Headers({}) } as unknown as NextRequest;
-      const res = await createPayment(req, { params: Promise.resolve({ id: activeInvoice.id }) } as unknown as IdParams);
+      const req = { json: async () => ({ amount: 100, method: "CASH" }), headers: new Headers({}), url: `http://localhost/api/invoices/${activeInvoice.id}/payments` } as unknown as NextRequest;
+      const res = await createPayment(req);
       expect(res.status).toBe(401);
     });
 
     it("should reject overpayment", async () => {
       setMockSession({ user: { id: assignedStaff.id, role: "ADMIN" } });
-      const req = { json: async () => ({ amount: 3000.00, method: "BANK_TRANSFER" }), headers: new Headers({}) } as unknown as NextRequest;
-      const paymentRes = await createPayment(req, { params: Promise.resolve({ id: activeInvoice.id }) } as unknown as IdParams);
+      const req = { json: async () => ({ amount: 3000.00, method: "BANK_TRANSFER" }), headers: new Headers({}), url: `http://localhost/api/invoices/${activeInvoice.id}/payments` } as unknown as NextRequest;
+      const paymentRes = await createPayment(req);
       expect(paymentRes.status).toBe(400);
       const result = await paymentRes.json();
       expect(result.error).toContain("OVERPAYMENT");
@@ -136,8 +138,8 @@ describe("Billing & Invoicing API", () => {
 
     it("should handle partial payment and transition status to PARTIALLY_PAID", async () => {
       setMockSession({ user: { id: assignedStaff.id, role: "ADMIN" } });
-      const req = { json: async () => ({ amount: 1000.00, method: "CASH" }), headers: new Headers({}) } as unknown as NextRequest;
-      const res = await createPayment(req, { params: Promise.resolve({ id: activeInvoice.id }) } as unknown as IdParams);
+      const req = { json: async () => ({ amount: 1000.00, method: "CASH" }), headers: new Headers({}), url: `http://localhost/api/invoices/${activeInvoice.id}/payments` } as unknown as NextRequest;
+      const res = await createPayment(req);
       expect(res.status).toBe(201);
       const result = await res.json();
       expect(result.invoice.status).toBe("PARTIALLY_PAID");
@@ -146,12 +148,12 @@ describe("Billing & Invoicing API", () => {
     it("should block VOID if payments exist", async () => {
       setMockSession({ user: { id: assignedStaff.id, role: "ADMIN" } });
       // Make a partial payment first
-      const payReq = { json: async () => ({ amount: 1000.00, method: "CASH" }), headers: new Headers({}) } as unknown as NextRequest;
-      await createPayment(payReq, { params: Promise.resolve({ id: activeInvoice.id }) } as unknown as IdParams);
+      const payReq = { json: async () => ({ amount: 1000.00, method: "CASH" }), headers: new Headers({}), url: `http://localhost/api/invoices/${activeInvoice.id}/payments` } as unknown as NextRequest;
+      await createPayment(payReq);
 
       // Now try to VOID the invoice
-      const patchReq = { json: async () => ({ status: "VOID" }), headers: new Headers({}) } as unknown as NextRequest;
-      const patchRes = await patchInvoice(patchReq, { params: Promise.resolve({ id: activeInvoice.id }) } as unknown as IdParams);
+      const patchReq = { json: async () => ({ status: "VOID" }), headers: new Headers({}), url: `http://localhost/api/invoices/${activeInvoice.id}` } as unknown as NextRequest;
+      const patchRes = await patchInvoice(patchReq);
       expect(patchRes.status).toBe(400);
       const resJson = await patchRes.json();
       expect(resJson.error).toContain("Cannot void an invoice");
@@ -159,8 +161,8 @@ describe("Billing & Invoicing API", () => {
 
     it("should handle full payment and transition to PAID", async () => {
       setMockSession({ user: { id: assignedStaff.id, role: "ADMIN" } });
-      const req = { json: async () => ({ amount: 2100.00, method: "CASH" }), headers: new Headers({}) } as unknown as NextRequest;
-      const res = await createPayment(req, { params: Promise.resolve({ id: activeInvoice.id }) } as unknown as IdParams);
+      const req = { json: async () => ({ amount: 2100.00, method: "CASH" }), headers: new Headers({}), url: `http://localhost/api/invoices/${activeInvoice.id}/payments` } as unknown as NextRequest;
+      const res = await createPayment(req);
       expect(res.status).toBe(201);
       const result = await res.json();
       expect(result.invoice.status).toBe("PAID");
@@ -171,7 +173,8 @@ describe("Billing & Invoicing API", () => {
     setMockSession({ user: { id: assignedStaff.id, role: "ADMIN" } });
     const reqs = Array.from({ length: 10 }, () => ({
       json: async () => getPayload(client.id),
-      headers: new Headers({})
+      headers: new Headers({}),
+      url: "http://localhost/api/invoices"
     } as unknown as NextRequest));
 
     const responses = await Promise.all(reqs.map(req => createInvoice(req)));
@@ -193,12 +196,13 @@ describe("Billing & Invoicing API", () => {
     // Pass payload with non-existent serviceSubscriptionId to force FK creation failure during transaction
     const badPayload = {
       ...getPayload(client.id),
-      serviceSubscriptionId: "invalid-non-existent-sub-id"
+      serviceSubscriptionId: "clqzzzzzzzzzzzzzzzzzzzzzz"
     };
 
     const req = {
       json: async () => badPayload,
-      headers: new Headers({})
+      headers: new Headers({}),
+      url: "http://localhost/api/invoices"
     } as unknown as NextRequest;
 
     const res = await createInvoice(req);

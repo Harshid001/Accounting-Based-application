@@ -1,32 +1,22 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { withAuth, validateBody } from "@/lib/api/withAuth";
 import crypto from "crypto";
-import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+import { sendEmail } from "@/lib/email";
 
-export async function POST(req: Request) {
-  try {
-    // 1. Role-check server-side
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-    if (session.user.role !== "ADMIN" && session.user.role !== "MANAGER") {
-      return new NextResponse("Forbidden", { status: 403 });
-    }
-    const userId = session.user.id;
+const VALID_STAFF_ROLES = ["ADMIN", "MANAGER", "ACCOUNTANT", "DATA_ENTRY"] as const;
+
+const createInviteSchema = z.object({
+  email: z.string().email(),
+  role: z.enum(["ADMIN", "MANAGER", "ACCOUNTANT", "DATA_ENTRY"]),
+});
+
+export const POST = withAuth(
+  async (req: NextRequest, { user, prisma }) => {
+    const userId = user.id;
 
     const body = await req.json();
-    const { email, role } = body;
-
-    if (!email || !role) {
-      return new NextResponse("Missing required fields", { status: 400 });
-    }
-
-    // Invites can only create staff-side roles; CLIENT is self-registered only.
-    if (role !== "ADMIN" && role !== "MANAGER" && role !== "ACCOUNTANT" && role !== "DATA_ENTRY") {
-      return new NextResponse("Invalid role", { status: 400 });
-    }
+    const { email, role } = validateBody(body, createInviteSchema);
 
     // 2. Generate token and hash
     const token = crypto.randomBytes(32).toString("hex");
@@ -49,11 +39,31 @@ export async function POST(req: Request) {
 
     // 5. Send invite email containing the *raw* token
     const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/register/staff?token=${token}`;
-    // await sendEmail(email, "You are invited to join the staff", `Click here: ${inviteUrl}`);
 
-    return NextResponse.json({ success: true, inviteUrl }); // Return URL for testing purposes
-  } catch (error) {
-    console.error("[INVITE_POST]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    await sendEmail({
+      to: email,
+      subject: "You're invited to join the AFMS team",
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #1a1a2e;">You've Been Invited</h2>
+          <p>You have been invited to join the AFMS platform as a <strong>${role}</strong>.</p>
+          <p>Click the link below to create your account. This invitation expires in 7 days.</p>
+          <p style="margin: 24px 0;">
+            <a href="${inviteUrl}" style="background: #1a1a2e; color: #fff; padding: 12px 24px; border-radius: 6px; text-decoration: none;">
+              Accept Invitation
+            </a>
+          </p>
+          <p style="color: #666; font-size: 12px;">
+            If you did not expect this invitation, you can safely ignore this email.
+          </p>
+        </div>
+      `,
+    });
+
+    return NextResponse.json({ success: true, email: invite.email });
+  },
+  {
+    allowedRoles: ["ADMIN", "MANAGER"],
   }
-}
+);
+

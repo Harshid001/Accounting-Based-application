@@ -1,6 +1,7 @@
 const { app, BrowserWindow } = require('electron');
 const { createServer } = require('http');
 const next = require('next');
+const path = require('path');
 
 const dev = !app.isPackaged;
 const dir = app.getAppPath();
@@ -15,8 +16,10 @@ function createWindow() {
     height: 800,
     show: false, // Don't show until ready-to-show
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: true,
+      sandbox: true,
     },
   });
 
@@ -59,3 +62,4 @@ app.on('activate', function () {
     createWindow();
   }
 });
+

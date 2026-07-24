@@ -7,6 +7,51 @@ import bcrypt from "bcryptjs"
 
 import { prisma } from "@/lib/prisma";
 
+/**
+ * Shared helper: upserts a Client + User for Google OAuth sign-in.
+ *
+ * Called by both the web Google provider (signIn callback) and the
+ * Capacitor google-native provider (authorize). Extracting this
+ * deduplicates ~30 lines of identical upsert logic.
+ */
+async function upsertGoogleClientUser(email: string, name: string) {
+  // Find an admin (fall back to manager) to assign this client to
+  const adminUser = await prisma.user.findFirst({
+    where: { role: "ADMIN", isActive: true },
+    select: { id: true }
+  }) ?? await prisma.user.findFirst({
+    where: { role: "MANAGER", isActive: true },
+    select: { id: true }
+  });
+
+  const clientData = await prisma.client.upsert({
+    where: { email },
+    update: {},
+    create: {
+      name,
+      email,
+      type: "INDIVIDUAL",
+      status: "ACTIVE",
+      assignedTo: adminUser ? { connect: { id: adminUser.id } } : undefined,
+    },
+  });
+
+  const dbUser = await prisma.user.upsert({
+    where: { email },
+    update: { clientId: clientData.id },
+    create: {
+      email,
+      name,
+      authProvider: "GOOGLE",
+      role: "CLIENT",
+      clientId: clientData.id,
+      isActive: true
+    }
+  });
+
+  return dbUser;
+}
+
 export async function canAccessClient(clientId: string, session: Session) {
   if (session.user.role === "ADMIN") return true;
   if (session.user.role === "CLIENT") {
@@ -124,41 +169,7 @@ export const authOptions: NextAuthOptions = {
             }
           }
 
-          // Find an admin (fall back to manager) to assign this client to so it
-          // always has an owner. Admins/managers see all clients regardless, but
-          // the assignment keeps the client accountable to a staff member.
-          const adminUser = await prisma.user.findFirst({
-            where: { role: "ADMIN", isActive: true },
-            select: { id: true }
-          }) ?? await prisma.user.findFirst({
-            where: { role: "MANAGER", isActive: true },
-            select: { id: true }
-          });
-
-          const clientData = await prisma.client.upsert({
-            where: { email },
-            update: {},
-            create: {
-              name: name,
-              email: email,
-              type: "INDIVIDUAL",
-              status: "ACTIVE",
-              assignedTo: adminUser ? { connect: { id: adminUser.id } } : undefined,
-            },
-          });
-
-          dbUser = await prisma.user.upsert({
-            where: { email },
-            update: { clientId: clientData.id },
-            create: {
-              email: email,
-              name: name,
-              authProvider: "GOOGLE",
-              role: "CLIENT",
-              clientId: clientData.id,
-              isActive: true
-            }
-          });
+          dbUser = await upsertGoogleClientUser(email, name);
 
           if (!dbUser.isActive) {
             throw new Error("Account is pending approval")
@@ -206,41 +217,7 @@ export const authOptions: NextAuthOptions = {
           }
         }
         
-        // Find an admin (fall back to manager) to assign this client to so it
-        // always has an owner. Admins/managers see all clients regardless, but
-        // the assignment keeps the client accountable to a staff member.
-        const adminUser = await prisma.user.findFirst({
-          where: { role: "ADMIN", isActive: true },
-          select: { id: true }
-        }) ?? await prisma.user.findFirst({
-          where: { role: "MANAGER", isActive: true },
-          select: { id: true }
-        });
-
-        const clientData = await prisma.client.upsert({
-          where: { email: user.email },
-          update: {},
-          create: {
-            name: user.name || user.email,
-            email: user.email,
-            type: "INDIVIDUAL",
-            status: "ACTIVE",
-            assignedTo: adminUser ? { connect: { id: adminUser.id } } : undefined,
-          },
-        });
-
-        dbUser = await prisma.user.upsert({
-          where: { email: user.email },
-          update: { clientId: clientData.id },
-          create: {
-            email: user.email,
-            name: user.name || "Google User",
-            authProvider: "GOOGLE",
-            role: "CLIENT",
-            clientId: clientData.id,
-            isActive: true
-          }
-        });
+        dbUser = await upsertGoogleClientUser(user.email, user.name || user.email);
         
         if (!dbUser.isActive) {
           return "/pending-approval";

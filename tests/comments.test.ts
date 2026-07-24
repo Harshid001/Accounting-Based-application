@@ -64,7 +64,8 @@ describe("Comments API", () => {
     setMockSession(null);
     const req = {
       json: async () => ({ content: "anon", parentType: "task", parentId: task.id }),
-      headers: new Headers({})
+      headers: new Headers({}),
+      url: "http://localhost/api/comments"
     } as unknown as NextRequest;
     const res = await createComment(req);
     expect(res.status).toBe(401);
@@ -74,7 +75,8 @@ describe("Comments API", () => {
     setMockSession({ user: { id: clientUser.id, role: "CLIENT", clientId: client.id } });
     const clientTaskReq = {
       json: async () => ({ content: "What is this task?", parentType: "task", parentId: task.id }),
-      headers: new Headers({})
+      headers: new Headers({}),
+      url: "http://localhost/api/comments"
     } as unknown as NextRequest;
     const clientTaskRes = await createComment(clientTaskReq);
     expect(clientTaskRes.status).toBe(403);
@@ -90,12 +92,14 @@ describe("Comments API", () => {
           content: "Please review this document @client", 
           parentType: "document", 
           parentId: doc.id,
-          mentions: [clientUser.id, "fake_id"] 
+          mentions: [clientUser.id, "clqzzzzzzzzzzzzzzzzzzzzzz"] 
         }),
-        headers: new Headers({})
+        headers: new Headers({}),
+        url: "http://localhost/api/comments"
       } as unknown as NextRequest;
       
       const validCommentRes = await createComment(validCommentReq);
+      console.log(await validCommentRes.clone().json().catch(async () => await validCommentRes.clone().text()));
       expect(validCommentRes.status).toBe(201);
       createdComment = await validCommentRes.json();
       
@@ -128,9 +132,10 @@ describe("Comments API", () => {
       setMockSession({ user: { id: adminUser.id, role: "ADMIN" } });
       const editReqAdmin = {
         json: async () => ({ content: "Admin editing" }),
-        headers: new Headers({})
+        headers: new Headers({}),
+        url: `http://localhost:3000/api/comments/${createdComment.id}`,
       } as unknown as NextRequest;
-      const editResAdmin = await patchComment(editReqAdmin, { params: Promise.resolve({ id: createdComment.id }) } as unknown as IdParams);
+      const editResAdmin = await patchComment(editReqAdmin);
       expect(editResAdmin.status).toBe(403);
     });
 
@@ -138,18 +143,20 @@ describe("Comments API", () => {
       setMockSession({ user: { id: accUser.id, role: "ACCOUNTANT" } });
       const editReqAcc = {
         json: async () => ({ content: "Accountant editing own" }),
-        headers: new Headers({})
+        headers: new Headers({}),
+        url: `http://localhost:3000/api/comments/${createdComment.id}`,
       } as unknown as NextRequest;
-      const editResAcc = await patchComment(editReqAcc, { params: Promise.resolve({ id: createdComment.id }) } as unknown as IdParams);
+      const editResAcc = await patchComment(editReqAcc);
       expect(editResAcc.status).toBe(200);
     });
 
     it("should allow admin to delete another user's comment (Moderation) and log it", async () => {
       setMockSession({ user: { id: adminUser.id, role: "ADMIN" } });
       const deleteReqAdmin = {
-        headers: new Headers({})
+        headers: new Headers({}),
+        url: `http://localhost:3000/api/comments/${createdComment.id}`,
       } as unknown as NextRequest;
-      const deleteResAdmin = await deleteComment(deleteReqAdmin, { params: Promise.resolve({ id: createdComment.id }) } as unknown as IdParams);
+      const deleteResAdmin = await deleteComment(deleteReqAdmin);
       expect(deleteResAdmin.status).toBe(200);
       
       const audit = await prisma.auditLog.findFirst({

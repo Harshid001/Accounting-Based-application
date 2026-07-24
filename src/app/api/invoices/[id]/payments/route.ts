@@ -1,32 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { withAuth } from "@/lib/api/withAuth";
 import { Prisma } from "@prisma/client";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withAuth(async (req: NextRequest, { user, prisma }) => {
+  const url = new URL(req.url);
+  const segments = url.pathname.split("/");
+  const invoiceId = segments[segments.length - 2];
+
+  const body = await req.json();
+  const { amount, method, referenceId, paymentDate } = body;
+
+  const paymentAmount = new Prisma.Decimal(amount);
+  if (paymentAmount.lte(0)) {
+    return NextResponse.json({ error: "Payment amount must be greater than zero" }, { status: 400 });
+  }
+
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const userRole = session.user.role;
-    if (!["ADMIN", "MANAGER", "ACCOUNTANT"].includes(userRole)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const { id: invoiceId } = await params;
-    const body = await req.json();
-    const { amount, method, referenceId, paymentDate } = body;
-
-    const paymentAmount = new Prisma.Decimal(amount);
-    if (paymentAmount.lte(0)) {
-      return NextResponse.json({ error: "Payment amount must be greater than zero" }, { status: 400 });
-    }
-
     // Wrap in a transaction to ensure consistency
     const result = await prisma.$transaction(async (tx) => {
       // 1. Fetch invoice with existing payments
@@ -86,7 +75,7 @@ export async function POST(
           entityType: "Payment",
           entityId: payment.id,
           action: "CREATE",
-          userId: session.user.id,
+          userId: user.id,
           diff: JSON.parse(JSON.stringify({ payment, invoiceStatusChange: newStatus }))
         }
       });
@@ -110,6 +99,8 @@ export async function POST(
     if (message === "Invoice not found") return NextResponse.json({ error: message }, { status: 404 });
     if (message === "Cannot pay a VOID invoice") return NextResponse.json({ error: message }, { status: 400 });
     
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    throw error;
   }
-}
+}, {
+  allowedRoles: ["ADMIN", "MANAGER", "ACCOUNTANT"],
+});

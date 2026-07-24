@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withAuth } from "@/lib/api/withAuth";
 import { getComplianceReportData, getRevenueReportData } from "@/lib/reports";
 import { generateReportPDF } from "@/lib/pdfGenerator";
-import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 
 // Next.js helper to convert Node Readable stream to Web ReadableStream
 function readableStreamToWeb(nodeStream: NodeJS.ReadableStream): ReadableStream {
@@ -16,15 +14,8 @@ function readableStreamToWeb(nodeStream: NodeJS.ReadableStream): ReadableStream 
   });
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest, { user, prisma }) => {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const userId = session.user.id;
-    const userRole = session.user.role;
-    
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type");
     const format = searchParams.get("format");
@@ -42,9 +33,9 @@ export async function GET(req: NextRequest) {
 
     let data;
     if (type === "revenue") {
-      data = await getRevenueReportData(userId, userRole, startDate, endDate, clientId);
+      data = await getRevenueReportData(user.id, user.role, startDate, endDate, clientId);
     } else {
-      data = await getComplianceReportData(userId, userRole, startDate, endDate, clientId);
+      data = await getComplianceReportData(user.id, user.role, startDate, endDate, clientId);
     }
 
     // Generate AuditLog entry for the export
@@ -53,7 +44,7 @@ export async function GET(req: NextRequest) {
         entityType: "Report",
         entityId: `report_${type}_${Date.now()}`,
         action: "EXPORT",
-        userId: userId,
+        userId: user.id,
         diff: {
           type,
           format,
@@ -83,7 +74,6 @@ export async function GET(req: NextRequest) {
     if (message === "Invalid date format" || message.includes("date range") || message.includes("before startDate")) {
       return NextResponse.json({ error: message }, { status: 400 });
     }
-    console.error("Export report error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    throw error;
   }
-}
+});

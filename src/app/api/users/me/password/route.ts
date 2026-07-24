@@ -1,20 +1,13 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
+import { withAuth } from "@/lib/api/withAuth";
 import bcrypt from "bcryptjs";
 
-export async function PATCH(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+export const PATCH = withAuth(async (req: NextRequest, { user, prisma }) => {
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
   });
 
-  if (!user || user.authProvider === "GOOGLE") {
+  if (!dbUser || dbUser.authProvider === "GOOGLE") {
     return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   }
 
@@ -25,17 +18,17 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
 
-  const isValid = await bcrypt.compare(currentPassword, user.password || "");
+  const isValid = await bcrypt.compare(currentPassword, dbUser.password || "");
   if (!isValid) {
     return NextResponse.json({ error: "Incorrect current password" }, { status: 403 });
   }
 
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  const hashedPassword = await bcrypt.hash(newPassword, 12);
 
   await prisma.user.update({
-    where: { id: user.id },
+    where: { id: dbUser.id },
     data: { password: hashedPassword },
   });
 
   return NextResponse.json({ success: true });
-}
+});

@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ROLES } from "@/lib/permissions";
+import { ROLES, isStaffLeadership, type Role } from "@/lib/permissions";
 import { withAuth, validateBody } from "@/lib/api/withAuth";
 import { updateTaskSchema } from "@/lib/api/validators";
 import { Prisma } from "@prisma/client";
-
-type Role = typeof ROLES[keyof typeof ROLES];
-
-function isStaffLeadership(role: Role): boolean {
-  return role === ROLES.ADMIN || role === ROLES.MANAGER;
-}
 
 export const PATCH = withAuth(async (req: NextRequest, { user, prisma }) => {
   const { searchParams } = new URL(req.url);

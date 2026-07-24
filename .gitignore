@@ -65,3 +65,13 @@ gitleaks_report.txt
 /mobile/dist/
 /mobile/android/app/build/
 /mobile/ios/build/
+
+# cookie/session files — never commit
+cookies*.txt
+
+# scratch/debug scripts
+whatisdeleted.txt
+check-users.ts
+verify-login.ts
+fix-any.ps1
+CLIENT_ADMIN_FIX_PROMPT.md

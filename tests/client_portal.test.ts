@@ -1,5 +1,6 @@
 import { expect, test, describe, beforeAll, afterAll, vi, beforeEach } from 'vitest'
 import { PrismaClient, Prisma } from '@prisma/client'
+import type { NextRequest } from 'next/server'
 import crypto from 'crypto'
 
 // ─── Mocks ──────────────────────────────────────────────────────────────
@@ -243,7 +244,7 @@ describe('Client Portal & Razorpay', () => {
         body: JSON.stringify({ invoiceId: otherInvoiceId })
       })
 
-      const res = await checkoutPost(req)
+      const res = await checkoutPost(req as unknown as NextRequest)
       expect(res.status).toBe(403)
 
       const json = await res.json()
@@ -261,7 +262,7 @@ describe('Client Portal & Razorpay', () => {
         body: JSON.stringify({ invoiceId: invoiceId })
       })
 
-      const res = await checkoutPost(req)
+      const res = await checkoutPost(req as unknown as NextRequest)
       expect(res.status).toBe(200)
 
       const json = await res.json()
@@ -291,7 +292,7 @@ describe('Client Portal & Razorpay', () => {
         body: JSON.stringify({ invoiceId: paidInvoiceId })
       })
 
-      const res = await checkoutPost(req)
+      const res = await checkoutPost(req as unknown as NextRequest)
       expect(res.status).toBe(400)
 
       const json = await res.json()
@@ -323,7 +324,7 @@ describe('Client Portal & Razorpay', () => {
         body: JSON.stringify({ invoiceId: zeroBal.id })
       })
 
-      const res = await checkoutPost(req)
+      const res = await checkoutPost(req as unknown as NextRequest)
       expect(res.status).toBe(400)
       const json = await res.json()
       expect(json.error).toBe("Balance is zero")
@@ -344,8 +345,8 @@ describe('Client Portal & Razorpay', () => {
         body: JSON.stringify({ invoiceId: invoiceId })
       })
 
-      const res = await checkoutPost(req)
-      expect(res.status).toBe(401)
+      const res = await checkoutPost(req as unknown as NextRequest)
+      expect(res.status).toBe(403)
     })
 
     test('Unauthenticated request → 401', async () => {
@@ -357,7 +358,7 @@ describe('Client Portal & Razorpay', () => {
         body: JSON.stringify({ invoiceId: invoiceId })
       })
 
-      const res = await checkoutPost(req)
+      const res = await checkoutPost(req as unknown as NextRequest)
       expect(res.status).toBe(401)
     })
   })
@@ -373,8 +374,8 @@ describe('Client Portal & Razorpay', () => {
         user: { id: clientUserId, role: 'CLIENT', clientId: clientId }
       }
 
-      const req = new Request('http://localhost/api/invoices/download', { method: 'GET' })
-      const res = await downloadGet(req, { params: Promise.resolve({ id: otherInvoiceId }) } as unknown as IdParams)
+      const req = { url: `http://localhost/api/invoices/${otherInvoiceId}/download` } as unknown as NextRequest;
+      const res = await downloadGet(req);
 
       expect(res.status).toBe(403)
       const json = await res.json()
@@ -386,8 +387,8 @@ describe('Client Portal & Razorpay', () => {
         user: { id: clientUserId, role: 'CLIENT', clientId: clientId }
       }
 
-      const req = new Request('http://localhost/api/invoices/download', { method: 'GET' })
-      const res = await downloadGet(req, { params: Promise.resolve({ id: invoiceId }) } as unknown as IdParams)
+      const req = { url: `http://localhost/api/invoices/${invoiceId}/download` } as unknown as NextRequest;
+      const res = await downloadGet(req);
 
       expect(res.status).toBe(200)
       expect(res.headers.get('Content-Type')).toBe('application/pdf')
@@ -398,8 +399,8 @@ describe('Client Portal & Razorpay', () => {
         user: { id: 'admin-user', role: 'ADMIN' }
       }
 
-      const req = new Request('http://localhost/api/invoices/download', { method: 'GET' })
-      const res = await downloadGet(req, { params: Promise.resolve({ id: otherInvoiceId }) } as unknown as IdParams)
+      const req = { url: `http://localhost/api/invoices/${otherInvoiceId}/download` } as unknown as NextRequest;
+      const res = await downloadGet(req);
 
       expect(res.status).toBe(200)
     })
@@ -407,8 +408,8 @@ describe('Client Portal & Razorpay', () => {
     test('Unauthenticated download → 401', async () => {
       mockSession = null
 
-      const req = new Request('http://localhost/api/invoices/download', { method: 'GET' })
-      const res = await downloadGet(req, { params: Promise.resolve({ id: invoiceId }) } as unknown as IdParams)
+      const req = { url: `http://localhost/api/invoices/${invoiceId}/download` } as unknown as NextRequest;
+      const res = await downloadGet(req);
 
       expect(res.status).toBe(401)
     })

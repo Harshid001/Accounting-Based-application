@@ -1,8 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withAuth } from "@/lib/api/withAuth";
 import { getS3Client } from "@/lib/storage";
 
 const PUBLIC_URL_BASE = process.env.S3_PUBLIC_URL!;
@@ -13,12 +11,7 @@ const ALLOWED_TYPES: Record<string, string> = {
   "image/webp": "webp",
 };
 
-export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = withAuth(async (req: NextRequest, { user, prisma }) => {
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
 
@@ -36,7 +29,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Image must be under 3MB" }, { status: 400 });
   }
 
-  const key = `avatars/${session.user.id}-${Date.now()}.${ext}`;
+  const key = `avatars/${user.id}-${Date.now()}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
   const { client: s3, bucketName: BUCKET } = getS3Client();
@@ -54,7 +47,7 @@ export async function POST(req: Request) {
 
   // Remove the previous avatar so old images don't pile up in the bucket
   const existing = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: user.id },
     select: { image: true },
   });
   
@@ -69,9 +62,9 @@ export async function POST(req: Request) {
   }
 
   await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: user.id },
     data: { image: imageUrl },
   });
 
   return NextResponse.json({ image: imageUrl });
-}
+});
