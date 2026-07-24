@@ -6,7 +6,8 @@ import { logger, getOrCreateRequestId, withRequestId } from "@/lib/logger";
 import { getRedirectTarget } from "@/lib/middleware-logic";
 
 const bucketByPath: Record<string, RateLimitBucket> = {
-  "/api/auth": "auth",
+  "/api/auth/callback": "auth",
+  "/api/auth/signin": "auth",
   "/api/register": "registration",
   "/api/webhooks": "webhook",
 };
