@@ -50,6 +50,10 @@ async function authMiddleware(request: NextRequest, token: any) {
     const url = request.nextUrl.clone();
     url.pathname = target;
     url.search = "";
+    if (request.headers.get("x-forwarded-proto") === "https") {
+      url.protocol = "https:";
+      url.port = "";
+    }
     return NextResponse.redirect(url);
   }
   return NextResponse.next();
@@ -68,7 +72,7 @@ export default async function proxy(request: NextRequest) {
 
   // Get token directly to prevent next-auth's withAuth wrapper from applying
   // hidden automated redirects away from /login when a stale session exists.
-  const token = await getToken({ req: request });
+  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
 
   const authResponse = await authMiddleware(request, token);
   if (authResponse.status !== 200) {
