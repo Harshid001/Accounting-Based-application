@@ -247,14 +247,14 @@ export function TaskDashboard() {
       </div>
 
       {/* Search & Filters Bar */}
-      <div className="flex flex-col gap-3 animate-fade-in" style={{ animationDelay: "50ms" }}>
-        <div className="relative">
+      <div className="flex flex-col md:flex-row items-center gap-3 animate-fade-in" style={{ animationDelay: "50ms" }}>
+        <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search tasks by title or description…"
-            className="pl-9 pr-9"
+            className="pl-9 pr-9 w-full"
           />
           {searchInput && (
             <button
@@ -266,7 +266,7 @@ export function TaskDashboard() {
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 w-full md:w-auto">
           {/* Assignee filter (managers/admins only) */}
           {isLeadership && (
             <Select value={assigneeFilter} onValueChange={(v) => setAssigneeFilter(v ?? "ALL")}>
