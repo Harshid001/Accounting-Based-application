@@ -14,12 +14,10 @@ export default async function ClientLayout({
 }) {
   const session = await getServerSession(authOptions)
 
-  if (!session) {
+  if (!session?.user) {
     redirect("/login")
   }
 
-  // Only CLIENT or STAFF acting on behalf of client can view? 
-  // Let's restrict this purely to CLIENT. If staff wants to view client data, they use /dashboard/clients/[id]
   if (session.user.role !== "CLIENT") {
     redirect("/dashboard")
   }

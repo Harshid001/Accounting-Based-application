@@ -46,7 +46,10 @@ async function authMiddleware(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (target) {
-    return NextResponse.redirect(new URL(target, request.url));
+    const url = request.nextUrl.clone();
+    url.pathname = target;
+    url.search = "";
+    return NextResponse.redirect(url);
   }
   return NextResponse.next();
 }

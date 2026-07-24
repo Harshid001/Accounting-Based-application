@@ -14,10 +14,10 @@ export default async function StaffLayout({
 }) {
   const session = await getServerSession(authOptions)
 
-  // CLIENT-role users get the separate client portal, not this shell.
-  if (!session) {
+  if (!session?.user) {
     redirect("/login")
   }
+
   if (session.user.role === "CLIENT") {
     redirect("/client-view")
   }
