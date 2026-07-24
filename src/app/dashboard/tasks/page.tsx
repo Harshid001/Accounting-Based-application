@@ -50,7 +50,6 @@ import {
 
 type TaskStatus = "NOT_STARTED" | "IN_PROGRESS" | "REVIEW" | "DONE";
 type SortBy = "dueDate" | "createdAt";
-type SortOrder = "asc" | "desc";
 
 interface Task extends TaskWithDetails {}
 
@@ -86,7 +85,6 @@ export function TaskDashboard() {
   const userId = session?.user?.id as string | undefined;
 
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [clients, setClients] = useState<Person[]>([]);
   const [staff, setStaff] = useState<Person[]>([]);
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "ALL">("ALL");
   const [loading, setLoading] = useState(true);
@@ -96,10 +94,8 @@ export function TaskDashboard() {
   // Filtering & sorting state
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [clientFilter, setClientFilter] = useState<string>("ALL");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("ALL");
   const [sortBy, setSortBy] = useState<SortBy>("dueDate");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 
   // Drawer state
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
@@ -119,11 +115,9 @@ export function TaskDashboard() {
       try {
         const params = new URLSearchParams();
         if (searchQuery) params.set("search", searchQuery);
-        if (clientFilter !== "ALL") params.set("clientId", clientFilter);
         if (assigneeFilter !== "ALL") params.set("assigneeId", assigneeFilter);
         if (statusFilter !== "ALL") params.set("status", statusFilter);
         params.set("sortBy", sortBy);
-        params.set("sortOrder", sortOrder);
 
         const res = await fetch(`/api/tasks?${params.toString()}`);
         if (!res.ok) throw new Error();
@@ -138,9 +132,6 @@ export function TaskDashboard() {
     loadTasksRef.current = loadTasks;
 
     if (role && canCreateTask(role)) {
-      fetch("/api/clients")
-        .then((r) => (r.ok ? r.json() : { data: [] }))
-        .then((res) => { if (!cancelled) setClients(res.data || []); });
       fetch("/api/users?role=STAFF")
         .then((r) => (r.ok ? r.json() : { data: [] }))
         .then((res) => { if (!cancelled) setStaff(res.data || []); });
@@ -159,7 +150,7 @@ export function TaskDashboard() {
   // Reload tasks when filters/sort/search change
   useEffect(() => {
     loadTasksRef.current();
-  }, [searchQuery, clientFilter, assigneeFilter, statusFilter, sortBy, sortOrder]);
+  }, [searchQuery, assigneeFilter, statusFilter, sortBy]);
 
   async function updateStatus(taskId: string, status: TaskStatus) {
     await fetch(`/api/tasks/${taskId}`, {
@@ -276,21 +267,6 @@ export function TaskDashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Client filter */}
-          <Select value={clientFilter} onValueChange={(v) => setClientFilter(v ?? "ALL")}>
-            <SelectTrigger size="sm" className="w-[160px]">
-              <SelectValue placeholder="Client" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All clients</SelectItem>
-              {clients.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
           {/* Assignee filter (managers/admins only) */}
           {isLeadership && (
             <Select value={assigneeFilter} onValueChange={(v) => setAssigneeFilter(v ?? "ALL")}>
@@ -316,17 +292,6 @@ export function TaskDashboard() {
             <SelectContent>
               <SelectItem value="dueDate">Due date</SelectItem>
               <SelectItem value="createdAt">Creation date</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Sort order toggle */}
-          <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as SortOrder)}>
-            <SelectTrigger size="sm" className="w-[110px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="asc">Ascending</SelectItem>
-              <SelectItem value="desc">Descending</SelectItem>
             </SelectContent>
           </Select>
         </div>
