@@ -90,29 +90,32 @@ export const createServiceSubscriptionSchema = z.object({
   filingFrequency: z.string().optional().nullable(),
 });
 
+const nullToUndefined = (val: unknown) =>
+  val === null || val === undefined || val === "" ? undefined : val;
+
 export const paginationSchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().max(100).default(50),
+  page: z.preprocess(nullToUndefined, z.coerce.number().int().positive().default(1)),
+  pageSize: z.preprocess(nullToUndefined, z.coerce.number().int().positive().max(100).default(50)),
 });
 
 export const taskFiltersSchema = paginationSchema.extend({
-  clientId: z.string().cuid().optional(),
-  status: z.enum(["NOT_STARTED", "IN_PROGRESS", "REVIEW", "DONE"]).optional(),
+  clientId: z.preprocess(nullToUndefined, z.string().cuid().optional()),
+  status: z.preprocess(nullToUndefined, z.enum(["NOT_STARTED", "IN_PROGRESS", "REVIEW", "DONE"]).optional()),
 });
 
 export const invoiceFiltersSchema = paginationSchema.extend({
-  clientId: z.string().cuid().optional(),
-  status: z.enum(["DRAFT", "SENT", "PARTIALLY_PAID", "PAID", "OVERDUE", "VOID"]).optional(),
+  clientId: z.preprocess(nullToUndefined, z.string().cuid().optional()),
+  status: z.preprocess(nullToUndefined, z.enum(["DRAFT", "SENT", "PARTIALLY_PAID", "PAID", "OVERDUE", "VOID"]).optional()),
 });
 
 export const clientFiltersSchema = paginationSchema.extend({
-  status: z.enum(["ACTIVE", "INACTIVE", "ONBOARDING"]).optional(),
-  search: z.string().optional(),
+  status: z.preprocess(nullToUndefined, z.enum(["ACTIVE", "INACTIVE", "ONBOARDING"]).optional()),
+  search: z.preprocess(nullToUndefined, z.string().optional()),
 });
 
 export const commentFiltersSchema = paginationSchema.extend({
-  parentType: z.enum(["task", "client", "document", "complianceItem", "invoice"]).optional(),
-  parentId: z.string().cuid().optional(),
+  parentType: z.preprocess(nullToUndefined, z.enum(["task", "client", "document", "complianceItem", "invoice"]).optional()),
+  parentId: z.preprocess(nullToUndefined, z.string().cuid().optional()),
 });
 
 export const registerClientSchema = z.object({

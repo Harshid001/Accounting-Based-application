@@ -28,8 +28,8 @@ export const GET = withAuth(async (req: NextRequest, { user }) => {
   const { searchParams } = new URL(req.url);
 
   const filters = clientFiltersSchema.parse({
-    page: searchParams.get("page"),
-    pageSize: searchParams.get("pageSize"),
+    page: searchParams.get("page") ?? undefined,
+    pageSize: searchParams.get("pageSize") ?? undefined,
   });
 
   const whereClause = buildClientWhereClause(userRole, userId);

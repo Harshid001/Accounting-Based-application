@@ -57,10 +57,10 @@ function buildCommentWhereClause(
 export const GET = withAuth(async (req: NextRequest, { user, prisma }) => {
   const { searchParams } = new URL(req.url);
   const filters = commentFiltersSchema.parse({
-    page: searchParams.get("page"),
-    pageSize: searchParams.get("pageSize"),
-    parentType: searchParams.get("parentType"),
-    parentId: searchParams.get("parentId"),
+    page: searchParams.get("page") ?? undefined,
+    pageSize: searchParams.get("pageSize") ?? undefined,
+    parentType: searchParams.get("parentType") ?? undefined,
+    parentId: searchParams.get("parentId") ?? undefined,
   });
 
   const userRole = user.role as Role;

@@ -24,10 +24,10 @@ function taskScopeWhere(user: { id: string; role: string }) {
 export const GET = withAuth(async (req: NextRequest, { user, prisma }) => {
   const { searchParams } = new URL(req.url);
   const filters = taskFiltersSchema.parse({
-    page: searchParams.get("page"),
-    pageSize: searchParams.get("pageSize"),
-    clientId: searchParams.get("clientId"),
-    status: searchParams.get("status"),
+    page: searchParams.get("page") ?? undefined,
+    pageSize: searchParams.get("pageSize") ?? undefined,
+    clientId: searchParams.get("clientId") ?? undefined,
+    status: searchParams.get("status") ?? undefined,
   });
 
   const userRole = user.role as Role;
